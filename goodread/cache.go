@@ -50,12 +50,12 @@ func (c *Cache) Get(url string) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	zr, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, false
 	}
-	defer zr.Close()
+	defer func() { _ = zr.Close() }()
 	body, err := io.ReadAll(zr)
 	if err != nil {
 		return nil, false
@@ -76,12 +76,12 @@ func (c *Cache) Put(url string, body []byte) error {
 	}
 	zw := gzip.NewWriter(f)
 	if _, err := zw.Write(body); err != nil {
-		zw.Close()
-		f.Close()
+		_ = zw.Close()
+		_ = f.Close()
 		return err
 	}
 	if err := zw.Close(); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	if err := f.Close(); err != nil {

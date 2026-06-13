@@ -150,7 +150,7 @@ func (c *Client) doGet(ctx context.Context, rawurl string) ([]byte, int, error) 
 	if err != nil {
 		return nil, 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// AWS WAF serves a JS challenge as 202/405 with x-amzn-waf-action: challenge
 	// and an empty body. No headless solver here, so treat it as blocked.

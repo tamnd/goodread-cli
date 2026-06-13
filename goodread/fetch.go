@@ -127,10 +127,7 @@ func (c *Client) GetShelf(ctx context.Context, userID, shelfName string, maxPage
 		return nil, nil, err
 	}
 	pages := 1
-	for {
-		if maxPages > 0 && pages >= maxPages {
-			break
-		}
+	for maxPages <= 0 || pages < maxPages {
 		next := ParseShelfNextPage(doc)
 		if next == "" {
 			break

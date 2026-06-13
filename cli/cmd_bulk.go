@@ -144,10 +144,7 @@ func (a *App) crawlCmd() *cobra.Command {
 				failed    int
 				mu        sync.Mutex
 			)
-			for {
-				if max > 0 && processed >= max {
-					break
-				}
+			for max <= 0 || processed < max {
 				batch := a.cfg.Workers * 2
 				if max > 0 && processed+batch > max {
 					batch = max - processed
@@ -349,7 +346,7 @@ func (a *App) dbExportCmd() *cobra.Command {
 				if err != nil {
 					return codeError(exitError, err)
 				}
-				defer f.Close()
+				defer func() { _ = f.Close() }()
 				w = f
 			}
 			n := 0

@@ -29,7 +29,7 @@ func OpenStore(path string) (*Store, error) {
 	}
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return s, nil
@@ -109,7 +109,7 @@ func (s *Store) CountsByType() (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := map[string]int{}
 	for rows.Next() {
 		var t string
@@ -134,7 +134,7 @@ func (s *Store) Each(entityType string, fn func(id string, data []byte) error) e
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id, data string
 		if err := rows.Scan(&id, &data); err != nil {
@@ -161,7 +161,7 @@ func (s *Store) NextPending(ctx context.Context, n int) ([]QueueItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	rows, err := tx.QueryContext(ctx,
 		`SELECT id,url,entity_type,priority FROM queue WHERE status='pending'
 		 ORDER BY priority DESC, id LIMIT ?`, n)
@@ -172,12 +172,12 @@ func (s *Store) NextPending(ctx context.Context, n int) ([]QueueItem, error) {
 	for rows.Next() {
 		var it QueueItem
 		if err := rows.Scan(&it.ID, &it.URL, &it.EntityType, &it.Priority); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return nil, err
 		}
 		items = append(items, it)
 	}
-	rows.Close()
+	_ = rows.Close()
 	for _, it := range items {
 		if _, err := tx.ExecContext(ctx, `UPDATE queue SET status='active' WHERE id=?`, it.ID); err != nil {
 			return nil, err
@@ -207,7 +207,7 @@ func (s *Store) QueueStats() (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := map[string]int{}
 	for rows.Next() {
 		var st string
