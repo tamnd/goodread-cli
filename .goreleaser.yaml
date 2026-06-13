@@ -187,3 +187,62 @@ release:
     name: goodread-cli
   draft: false
   prerelease: auto
+  name_template: "goodread {{ .Tag }}"
+  header: |
+    A fast, friendly command line for public Goodreads data. One static binary,
+    no API key, no account. It reads public book, author, series, list, quote,
+    user, shelf, and genre pages into rich JSON, JSONL, CSV, TSV, or a table,
+    and routes around the Goodreads WAF through open endpoints so search and
+    shelves keep working.
+
+    ### Install
+
+    Go:
+
+    ```sh
+    go install github.com/tamnd/goodread-cli/cmd/goodread@{{ .Tag }}
+    ```
+
+    Homebrew:
+
+    ```sh
+    brew install --cask tamnd/tap/goodread
+    ```
+
+    Scoop:
+
+    ```sh
+    scoop bucket add tamnd https://github.com/tamnd/scoop-bucket
+    scoop install goodread
+    ```
+
+    Container:
+
+    ```sh
+    docker run --rm ghcr.io/tamnd/goodread:{{ trimprefix .Tag "v" }} search "dune"
+    ```
+
+    Or download a prebuilt binary for your platform from the assets below.
+  footer: |
+    ### Verify
+
+    Every archive is listed in `checksums.txt`, which is signed with cosign
+    (keyless). Verify the checksum signature before trusting a download:
+
+    ```sh
+    cosign verify-blob checksums.txt \
+      --certificate checksums.txt.pem \
+      --signature checksums.txt.sig \
+      --certificate-identity-regexp 'https://github.com/tamnd/goodread-cli' \
+      --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
+    ```
+
+    The container image and its SBOM are signed the same way.
+
+    ### Links
+
+    - Docs: https://goodread-cli.tamnd.com
+    - Source: https://github.com/tamnd/goodread-cli
+
+    Not affiliated with, endorsed by, or sponsored by Goodreads or Amazon.
+    goodread reads only public pages and stays within polite rate limits.
