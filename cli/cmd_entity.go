@@ -121,17 +121,18 @@ func (a *App) seriesCmd() *cobra.Command {
 
 func (a *App) listCmd() *cobra.Command {
 	var booksOnly bool
+	var maxPages int
 	cmd := &cobra.Command{
 		Use:     "list <id|url>",
 		Short:   "Fetch a Listopia list and its books",
 		Args:    cobra.ExactArgs(1),
-		Example: "  goodread list 1.Best_Books_Ever --books",
+		Example: "  goodread list 1.Best_Books_Ever --books\n  goodread list 1.Best_Books_Ever --books --max-pages 3",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
 			if e, got := goodread.Classify(args[0]); e == "list" && got != "" {
 				id = got
 			}
-			l, books, err := a.client.GetList(cmd.Context(), id)
+			l, books, err := a.client.GetList(cmd.Context(), id, maxPages)
 			if err != nil {
 				return mapFetchErr(err)
 			}
@@ -148,21 +149,24 @@ func (a *App) listCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&booksOnly, "books", false, "list the list's books instead of the list header")
+	cmd.Flags().IntVar(&maxPages, "max-pages", 1, "maximum pages to walk (0 = all, 100 books per page)")
 	return cmd
 }
 
 // quote ─────────────────────────────────────────────────────────────────────
 
 func (a *App) quoteCmd() *cobra.Command {
-	return &cobra.Command{
+	var maxPages int
+	cmd := &cobra.Command{
 		Use:   "quote <url|author-id|book-id>",
 		Short: "Fetch quotes from a quotes page, author, or book",
 		Args:  cobra.ExactArgs(1),
 		Example: "  goodread quote https://www.goodreads.com/author/quotes/153394\n" +
+			"  goodread quote 153394 --max-pages 3\n" +
 			"  goodread quote https://www.goodreads.com/work/quotes/2792775",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			url := quotesURL(args[0])
-			quotes, err := a.client.GetQuotes(cmd.Context(), url)
+			quotes, err := a.client.GetQuotes(cmd.Context(), url, maxPages)
 			if err != nil {
 				return mapFetchErr(err)
 			}
@@ -175,6 +179,8 @@ func (a *App) quoteCmd() *cobra.Command {
 			return a.renderOrEmpty(quotes, len(quotes))
 		},
 	}
+	cmd.Flags().IntVar(&maxPages, "max-pages", 1, "maximum pages to walk (0 = all, 30 quotes per page)")
+	return cmd
 }
 
 func quotesURL(arg string) string {

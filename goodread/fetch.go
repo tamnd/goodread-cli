@@ -47,8 +47,10 @@ func (c *Client) GetSeries(ctx context.Context, id string) (*Series, []SeriesBoo
 	return ParseSeries(doc, numericPrefix(id), u)
 }
 
-// GetList fetches and parses a Listopia list by id (keeps "<num>.<slug>").
-func (c *Client) GetList(ctx context.Context, id string) (*List, []ListBook, error) {
+// GetList fetches and parses a Listopia list by id (keeps "<num>.<slug>"),
+// walking pagination up to maxPages (maxPages <= 0 means all pages). It returns
+// the list header and every book row across the walked pages.
+func (c *Client) GetList(ctx context.Context, id string, maxPages int) (*List, []ListBook, error) {
 	u := ListURL(id)
 	doc, code, err := c.FetchHTML(ctx, u)
 	if err != nil {
@@ -57,7 +59,31 @@ func (c *Client) GetList(ctx context.Context, id string) (*List, []ListBook, err
 	if code == 404 || doc == nil {
 		return nil, nil, ErrNotFound
 	}
-	return ParseList(doc, id, u)
+	list, books, err := ParseList(doc, id, u)
+	if err != nil {
+		return nil, nil, err
+	}
+	pages := 1
+	for maxPages <= 0 || pages < maxPages {
+		next := ParseListNextPage(doc)
+		if next == "" {
+			break
+		}
+		doc, code, err = c.FetchHTML(ctx, next)
+		if err != nil {
+			return list, books, err
+		}
+		if code == 404 || doc == nil {
+			break
+		}
+		_, more, err := ParseList(doc, id, next)
+		if err != nil || len(more) == 0 {
+			break
+		}
+		books = append(books, more...)
+		pages++
+	}
+	return list, books, nil
 }
 
 // GetGenre fetches and parses a genre page by slug.
@@ -86,8 +112,9 @@ func (c *Client) GetUser(ctx context.Context, id string) (*User, error) {
 	return ParseUser(doc, numericPrefix(id), u)
 }
 
-// GetQuotes fetches and parses a quotes page (an author's or a book's quotes URL).
-func (c *Client) GetQuotes(ctx context.Context, pageURL string) ([]Quote, error) {
+// GetQuotes fetches and parses a quotes page (an author's or a book's quotes
+// URL), walking pagination up to maxPages (maxPages <= 0 means all pages).
+func (c *Client) GetQuotes(ctx context.Context, pageURL string, maxPages int) ([]Quote, error) {
 	doc, code, err := c.FetchHTML(ctx, pageURL)
 	if err != nil {
 		return nil, err
@@ -95,7 +122,31 @@ func (c *Client) GetQuotes(ctx context.Context, pageURL string) ([]Quote, error)
 	if code == 404 || doc == nil {
 		return nil, ErrNotFound
 	}
-	return ParseQuotes(doc, pageURL)
+	quotes, err := ParseQuotes(doc, pageURL)
+	if err != nil {
+		return nil, err
+	}
+	pages := 1
+	for maxPages <= 0 || pages < maxPages {
+		next := ParseQuotesNextPage(doc)
+		if next == "" {
+			break
+		}
+		doc, code, err = c.FetchHTML(ctx, next)
+		if err != nil {
+			return quotes, err
+		}
+		if code == 404 || doc == nil {
+			break
+		}
+		more, err := ParseQuotes(doc, next)
+		if err != nil || len(more) == 0 {
+			break
+		}
+		quotes = append(quotes, more...)
+		pages++
+	}
+	return quotes, nil
 }
 
 // GetReviews fetches a book page and returns the reviews embedded on it.

@@ -1004,11 +1004,38 @@ func ParseSearchHTML(doc *goquery.Document) []SearchResult {
 
 // ParseSearchHTMLNextPage returns the next search page URL, or "".
 func ParseSearchHTMLNextPage(doc *goquery.Document) string {
-	href, ok := doc.Find("a.next_page").Attr("href")
-	if !ok || href == "" {
-		return ""
-	}
-	return absURL(href)
+	return parseNextPage(doc, "")
+}
+
+// ParseListNextPage returns the next Listopia page URL, or "". A list page also
+// carries a "next" link for its comments thread (/list/comments/...); want
+// scopes the match to the books pagination (/list/show/...).
+func ParseListNextPage(doc *goquery.Document) string {
+	return parseNextPage(doc, "/list/show/")
+}
+
+// ParseQuotesNextPage returns the next quotes page URL, or "". It matches both
+// author (/author/quotes/...) and work (/work/quotes/...) quote listings.
+func ParseQuotesNextPage(doc *goquery.Document) string {
+	return parseNextPage(doc, "/quotes/")
+}
+
+// parseNextPage returns the first "a.next_page" href whose value contains want
+// (any href when want is ""), resolved to an absolute URL, or "".
+func parseNextPage(doc *goquery.Document, want string) string {
+	var next string
+	doc.Find("a.next_page").EachWithBreak(func(_ int, sel *goquery.Selection) bool {
+		href, ok := sel.Attr("href")
+		if !ok || href == "" {
+			return true
+		}
+		if want != "" && !strings.Contains(href, want) {
+			return true
+		}
+		next = absURL(href)
+		return false
+	})
+	return next
 }
 
 // reactProps returns the JSON of the first data-react-props attribute for a
