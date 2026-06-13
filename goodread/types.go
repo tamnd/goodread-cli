@@ -10,6 +10,7 @@ import "time"
 // Book is a Goodreads book page (/book/show/<id>).
 type Book struct {
 	BookID             string    `json:"book_id"`
+	WorkID             string    `json:"work_id"`
 	Title              string    `json:"title"`
 	TitleWithoutSeries string    `json:"title_without_series"`
 	Description        string    `json:"description"`
@@ -50,6 +51,7 @@ type Author struct {
 	Genres         []string  `json:"genres"`
 	AvgRating      float64   `json:"avg_rating"`
 	RatingsCount   int64     `json:"ratings_count"`
+	ReviewsCount   int64     `json:"reviews_count"`
 	BooksCount     int       `json:"books_count"`
 	FollowersCount int       `json:"followers_count"`
 	NotableBookIDs []string  `json:"notable_book_ids"`
@@ -62,6 +64,8 @@ type Series struct {
 	SeriesID         string    `json:"series_id"`
 	Name             string    `json:"name"`
 	Description      string    `json:"description"`
+	AuthorID         string    `json:"author_id"`
+	AuthorName       string    `json:"author_name"`
 	TotalBooks       int       `json:"total_books"`
 	PrimaryWorkCount int       `json:"primary_work_count"`
 	BookIDs          []string  `json:"book_ids"`
@@ -69,32 +73,42 @@ type Series struct {
 	FetchedAt        time.Time `json:"fetched_at"`
 }
 
-// SeriesBook links a series to a book at a position.
+// SeriesBook links a series to a book at a position. PositionLabel keeps the
+// raw Goodreads label ("Book 1", "Book 0.5") since series positions are not
+// always whole numbers.
 type SeriesBook struct {
-	SeriesID string `json:"series_id"`
-	BookID   string `json:"book_id"`
-	Position int    `json:"position"`
+	SeriesID      string `json:"series_id"`
+	BookID        string `json:"book_id"`
+	Position      int    `json:"position"`
+	PositionLabel string `json:"position_label"`
 }
 
 // List is a Goodreads Listopia list (/list/show/<id>).
 type List struct {
-	ListID        string    `json:"list_id"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	BooksCount    int       `json:"books_count"`
-	VotersCount   int       `json:"voters_count"`
-	Tags          []string  `json:"tags"`
-	CreatedByUser string    `json:"created_by_user"`
-	URL           string    `json:"url"`
-	FetchedAt     time.Time `json:"fetched_at"`
+	ListID          string    `json:"list_id"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	BooksCount      int       `json:"books_count"`
+	VotersCount     int       `json:"voters_count"`
+	LikesCount      int       `json:"likes_count"`
+	Tags            []string  `json:"tags"`
+	CreatedByUser   string    `json:"created_by_user"`
+	CreatedByUserID string    `json:"created_by_user_id"`
+	CreatedDate     string    `json:"created_date"`
+	URL             string    `json:"url"`
+	FetchedAt       time.Time `json:"fetched_at"`
 }
 
-// ListBook links a list to a book with rank and votes.
+// ListBook links a list to a book with its rank, score, votes, and the book's
+// aggregate rating as shown on the list row.
 type ListBook struct {
-	ListID string `json:"list_id"`
-	BookID string `json:"book_id"`
-	Rank   int    `json:"rank"`
-	Votes  int    `json:"votes"`
+	ListID       string  `json:"list_id"`
+	BookID       string  `json:"book_id"`
+	Rank         int     `json:"rank"`
+	Score        int     `json:"score"`
+	Votes        int     `json:"votes"`
+	AvgRating    float64 `json:"avg_rating"`
+	RatingsCount int64   `json:"ratings_count"`
 }
 
 // Review is a Goodreads book review.
@@ -120,6 +134,7 @@ type Quote struct {
 	AuthorName string    `json:"author_name"`
 	BookID     string    `json:"book_id"`
 	BookTitle  string    `json:"book_title"`
+	WorkID     string    `json:"work_id"`
 	LikesCount int       `json:"likes_count"`
 	Tags       []string  `json:"tags"`
 	URL        string    `json:"url"`
@@ -128,33 +143,37 @@ type Quote struct {
 
 // User is a public Goodreads reader profile (/user/show/<id>).
 type User struct {
-	UserID          string    `json:"user_id"`
-	Name            string    `json:"name"`
-	Username        string    `json:"username"`
-	Location        string    `json:"location"`
-	JoinedDate      time.Time `json:"joined_date"`
-	FriendsCount    int       `json:"friends_count"`
-	BooksReadCount  int       `json:"books_read_count"`
-	RatingsCount    int       `json:"ratings_count"`
-	ReviewsCount    int       `json:"reviews_count"`
-	AvgRating       float64   `json:"avg_rating"`
-	Bio             string    `json:"bio"`
-	Website         string    `json:"website"`
-	AvatarURL       string    `json:"avatar_url"`
-	FavoriteBookIDs []string  `json:"favorite_book_ids"`
-	URL             string    `json:"url"`
-	FetchedAt       time.Time `json:"fetched_at"`
+	UserID         string    `json:"user_id"`
+	Name           string    `json:"name"`
+	Username       string    `json:"username"`
+	Location       string    `json:"location"`
+	JoinedDate     time.Time `json:"joined_date"`
+	FriendsCount   int       `json:"friends_count"`
+	BooksCount     int       `json:"books_count"`
+	BooksReadCount int       `json:"books_read_count"`
+	RatingsCount   int       `json:"ratings_count"`
+	ReviewsCount   int       `json:"reviews_count"`
+	AvgRating      float64   `json:"avg_rating"`
+	Bio            string    `json:"bio"`
+	Website        string    `json:"website"`
+	AvatarURL      string    `json:"avatar_url"`
+
+	FavoriteBookIDs         []string  `json:"favorite_book_ids"`
+	CurrentlyReadingBookIDs []string  `json:"currently_reading_book_ids"`
+	URL                     string    `json:"url"`
+	FetchedAt               time.Time `json:"fetched_at"`
 }
 
 // Genre is a Goodreads genre/taxonomy node (/genres/<slug>).
 type Genre struct {
-	Slug        string    `json:"slug"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	BooksCount  int       `json:"books_count"`
-	BookIDs     []string  `json:"book_ids"`
-	URL         string    `json:"url"`
-	FetchedAt   time.Time `json:"fetched_at"`
+	Slug          string    `json:"slug"`
+	Name          string    `json:"name"`
+	Description   string    `json:"description"`
+	BooksCount    int       `json:"books_count"`
+	BookIDs       []string  `json:"book_ids"`
+	RelatedGenres []string  `json:"related_genres"`
+	URL           string    `json:"url"`
+	FetchedAt     time.Time `json:"fetched_at"`
 }
 
 // Shelf is a user's named reading shelf.
@@ -171,21 +190,24 @@ type Shelf struct {
 // populates the richer fields (author/isbn/review/...); the HTML fallback fills
 // only the basics.
 type ShelfBook struct {
-	ShelfID    string    `json:"shelf_id"`
-	UserID     string    `json:"user_id"`
-	BookID     string    `json:"book_id"`
-	Title      string    `json:"title"`
-	AuthorName string    `json:"author_name,omitempty"`
-	ISBN       string    `json:"isbn,omitempty"`
-	NumPages   int       `json:"num_pages,omitempty"`
-	AvgRating  float64   `json:"avg_rating,omitempty"`
-	Rating     int       `json:"rating"`
-	Shelves    []string  `json:"shelves,omitempty"`
-	ReviewID   string    `json:"review_id,omitempty"`
-	ReviewText string    `json:"review_text,omitempty"`
-	CoverURL   string    `json:"cover_url,omitempty"`
-	DateAdded  time.Time `json:"date_added"`
-	DateRead   time.Time `json:"date_read"`
+	ShelfID         string    `json:"shelf_id"`
+	UserID          string    `json:"user_id"`
+	BookID          string    `json:"book_id"`
+	Title           string    `json:"title"`
+	AuthorName      string    `json:"author_name,omitempty"`
+	ISBN            string    `json:"isbn,omitempty"`
+	NumPages        int       `json:"num_pages,omitempty"`
+	AvgRating       float64   `json:"avg_rating,omitempty"`
+	Rating          int       `json:"rating"`
+	Shelves         []string  `json:"shelves,omitempty"`
+	ReviewID        string    `json:"review_id,omitempty"`
+	ReviewText      string    `json:"review_text,omitempty"`
+	BookDescription string    `json:"book_description,omitempty"`
+	BookPublished   int       `json:"book_published,omitempty"`
+	CoverURL        string    `json:"cover_url,omitempty"`
+	DateAdded       time.Time `json:"date_added"`
+	DateCreated     time.Time `json:"date_created"`
+	DateRead        time.Time `json:"date_read"`
 }
 
 // SearchResult is one result from autocomplete or full search.
