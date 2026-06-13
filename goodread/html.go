@@ -26,6 +26,22 @@ func cleanHTML(s string) string {
 
 var reWS = regexp.MustCompile(`\s+`)
 
+// cleanText strips tags, unescapes entities, and collapses interior whitespace.
+// Use it for descriptions where the source markup carries stray newlines and
+// indentation between inline elements.
+func cleanText(s string) string {
+	return strings.TrimSpace(reWS.ReplaceAllString(cleanHTML(s), " "))
+}
+
+var reCoverSize = regexp.MustCompile(`\._S[XY]\d+_`)
+
+// fullCoverURL rewrites a Goodreads thumbnail URL to its full-size form by
+// dropping the "._SX50_" / "._SY75_" size token. A URL without the token is
+// returned unchanged.
+func fullCoverURL(u string) string {
+	return reCoverSize.ReplaceAllString(u, "")
+}
+
 // cleanBio strips the "edit data" affordance and collapses whitespace in a bio.
 func cleanBio(s string) string {
 	s = cleanHTML(s)
