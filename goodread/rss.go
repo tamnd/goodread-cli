@@ -17,19 +17,23 @@ type rssShelf struct {
 }
 
 type rssItem struct {
-	GUID          string `xml:"guid"`
-	Title         string `xml:"title"`
-	BookID        string `xml:"book_id"`
-	BookImageURL  string `xml:"book_image_url"`
-	AuthorName    string `xml:"author_name"`
-	ISBN          string `xml:"isbn"`
-	UserRating    string `xml:"user_rating"`
-	UserReadAt    string `xml:"user_read_at"`
-	UserDateAdded string `xml:"user_date_added"`
-	UserShelves   string `xml:"user_shelves"`
-	UserReview    string `xml:"user_review"`
-	AverageRating string `xml:"average_rating"`
-	NumPages      string `xml:"book>num_pages"`
+	GUID            string `xml:"guid"`
+	Title           string `xml:"title"`
+	BookID          string `xml:"book_id"`
+	BookImageURL    string `xml:"book_large_image_url"`
+	BookSmallImage  string `xml:"book_image_url"`
+	BookDescription string `xml:"book_description"`
+	BookPublished   string `xml:"book_published"`
+	AuthorName      string `xml:"author_name"`
+	ISBN            string `xml:"isbn"`
+	UserRating      string `xml:"user_rating"`
+	UserReadAt      string `xml:"user_read_at"`
+	UserDateAdded   string `xml:"user_date_added"`
+	UserDateCreated string `xml:"user_date_created"`
+	UserShelves     string `xml:"user_shelves"`
+	UserReview      string `xml:"user_review"`
+	AverageRating   string `xml:"average_rating"`
+	NumPages        string `xml:"book>num_pages"`
 }
 
 // ParseShelfRSS parses a shelf RSS feed into a shelf header and its rows.
@@ -48,19 +52,25 @@ func ParseShelfRSS(body []byte, userID, shelfName, pageURL string) (*Shelf, []Sh
 	}
 	rows := make([]ShelfBook, 0, len(feed.Channel.Items))
 	for _, it := range feed.Channel.Items {
+		cover := strings.TrimSpace(it.BookImageURL)
+		if cover == "" {
+			cover = strings.TrimSpace(it.BookSmallImage)
+		}
 		sb := ShelfBook{
-			ShelfID:    shelfID,
-			UserID:     userID,
-			BookID:     strings.TrimSpace(it.BookID),
-			Title:      cleanHTML(it.Title),
-			AuthorName: strings.TrimSpace(it.AuthorName),
-			ISBN:       strings.TrimSpace(it.ISBN),
-			NumPages:   atoiClean(it.NumPages),
-			AvgRating:  parseFloat(it.AverageRating),
-			Rating:     atoiClean(it.UserRating),
-			ReviewID:   reviewIDFromGUID(it.GUID),
-			ReviewText: cleanHTML(it.UserReview),
-			CoverURL:   strings.TrimSpace(it.BookImageURL),
+			ShelfID:         shelfID,
+			UserID:          userID,
+			BookID:          strings.TrimSpace(it.BookID),
+			Title:           cleanHTML(it.Title),
+			AuthorName:      strings.TrimSpace(it.AuthorName),
+			ISBN:            strings.TrimSpace(it.ISBN),
+			NumPages:        atoiClean(it.NumPages),
+			AvgRating:       parseFloat(it.AverageRating),
+			Rating:          atoiClean(it.UserRating),
+			ReviewID:        reviewIDFromGUID(it.GUID),
+			ReviewText:      cleanHTML(it.UserReview),
+			BookDescription: cleanText(it.BookDescription),
+			BookPublished:   atoiClean(it.BookPublished),
+			CoverURL:        cover,
 		}
 		for _, s := range strings.Split(it.UserShelves, ",") {
 			if s = strings.TrimSpace(s); s != "" {
@@ -68,6 +78,7 @@ func ParseShelfRSS(body []byte, userID, shelfName, pageURL string) (*Shelf, []Sh
 			}
 		}
 		sb.DateAdded = parseRSSDate(it.UserDateAdded)
+		sb.DateCreated = parseRSSDate(it.UserDateCreated)
 		sb.DateRead = parseRSSDate(it.UserReadAt)
 		rows = append(rows, sb)
 	}
