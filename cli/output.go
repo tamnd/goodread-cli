@@ -43,7 +43,7 @@ func NewRenderer(w io.Writer, format Format, fields []string, noHeader bool, tmp
 // Render writes records (a slice of structs) in the configured format.
 func (r *Renderer) Render(records any) error {
 	rv := reflect.ValueOf(records)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Slice {
@@ -109,7 +109,7 @@ func (r *Renderer) renderTemplate(items []any) error {
 		if err := t.Execute(r.w, it); err != nil {
 			return err
 		}
-		fmt.Fprintln(r.w)
+		_, _ = fmt.Fprintln(r.w)
 	}
 	return nil
 }
@@ -118,7 +118,7 @@ func (r *Renderer) renderURL(items []any) error {
 	for _, it := range items {
 		m := toMap(it)
 		if u, ok := m["url"]; ok && u != "" {
-			fmt.Fprintln(r.w, u)
+			_, _ = fmt.Fprintln(r.w, u)
 		}
 	}
 	return nil
@@ -132,7 +132,7 @@ func (r *Renderer) renderRaw(items []any) error {
 		for _, c := range cols {
 			vals = append(vals, m[c])
 		}
-		fmt.Fprintln(r.w, strings.Join(vals, " "))
+		_, _ = fmt.Fprintln(r.w, strings.Join(vals, " "))
 	}
 	return nil
 }
@@ -144,7 +144,7 @@ func (r *Renderer) renderTable(items []any) error {
 	cols := r.columns(items)
 	tw := tabwriter.NewWriter(r.w, 0, 4, 2, ' ', 0)
 	if !r.NoHeader {
-		fmt.Fprintln(tw, strings.Join(upperAll(cols), "\t"))
+		_, _ = fmt.Fprintln(tw, strings.Join(upperAll(cols), "\t"))
 	}
 	for _, it := range items {
 		m := toMap(it)
@@ -152,7 +152,7 @@ func (r *Renderer) renderTable(items []any) error {
 		for i, c := range cols {
 			cells[i] = truncate(m[c], 60)
 		}
-		fmt.Fprintln(tw, strings.Join(cells, "\t"))
+		_, _ = fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}
 	return tw.Flush()
 }
@@ -199,7 +199,7 @@ func (r *Renderer) columns(items []any) []string {
 func toMap(v any) map[string]string {
 	out := map[string]string{}
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Struct {
@@ -222,7 +222,7 @@ func toMap(v any) map[string]string {
 
 func structJSONKeys(v any) []string {
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Struct {

@@ -120,7 +120,7 @@ func (c *Client) fetchMaybeGz(ctx context.Context, u string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("gunzip sitemap: %w", err)
 		}
-		defer zr.Close()
+		defer func() { _ = zr.Close() }()
 		if body, err = io.ReadAll(zr); err != nil {
 			return nil, err
 		}
