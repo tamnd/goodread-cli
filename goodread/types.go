@@ -9,12 +9,12 @@ import "time"
 
 // Book is a Goodreads book page (/book/show/<id>).
 type Book struct {
-	BookID             string    `json:"book_id"`
+	BookID             string    `json:"book_id" kit:"id"`
 	WorkID             string    `json:"work_id"`
 	Title              string    `json:"title"`
 	TitleWithoutSeries string    `json:"title_without_series"`
-	Description        string    `json:"description"`
-	AuthorID           string    `json:"author_id"`
+	Description        string    `json:"description" kit:"body"`
+	AuthorID           string    `json:"author_id" kit:"link,kind=goodreads/author"`
 	AuthorName         string    `json:"author_name"`
 	ISBN               string    `json:"isbn"`
 	ISBN13             string    `json:"isbn13"`
@@ -27,21 +27,21 @@ type Book struct {
 	Language           string    `json:"language"`
 	Pages              int       `json:"pages"`
 	Format             string    `json:"format"`
-	SeriesID           string    `json:"series_id"`
+	SeriesID           string    `json:"series_id" kit:"link,kind=goodreads/series,optional"`
 	SeriesName         string    `json:"series_name"`
 	SeriesPosition     string    `json:"series_position"`
 	Genres             []string  `json:"genres"`
 	CoverURL           string    `json:"cover_url"`
 	URL                string    `json:"url"`
-	SimilarBookIDs     []string  `json:"similar_book_ids"`
+	SimilarBookIDs     []string  `json:"similar_book_ids" kit:"link,kind=goodreads/book,optional"`
 	FetchedAt          time.Time `json:"fetched_at"`
 }
 
 // Author is a Goodreads author page (/author/show/<id>).
 type Author struct {
-	AuthorID       string    `json:"author_id"`
+	AuthorID       string    `json:"author_id" kit:"id"`
 	Name           string    `json:"name"`
-	Bio            string    `json:"bio"`
+	Bio            string    `json:"bio" kit:"body"`
 	PhotoURL       string    `json:"photo_url"`
 	Website        string    `json:"website"`
 	BornDate       string    `json:"born_date"`
@@ -54,21 +54,21 @@ type Author struct {
 	ReviewsCount   int64     `json:"reviews_count"`
 	BooksCount     int       `json:"books_count"`
 	FollowersCount int       `json:"followers_count"`
-	NotableBookIDs []string  `json:"notable_book_ids"`
+	NotableBookIDs []string  `json:"notable_book_ids" kit:"link,kind=goodreads/book,optional"`
 	URL            string    `json:"url"`
 	FetchedAt      time.Time `json:"fetched_at"`
 }
 
 // Series is a Goodreads book series (/series/<id>).
 type Series struct {
-	SeriesID         string    `json:"series_id"`
+	SeriesID         string    `json:"series_id" kit:"id"`
 	Name             string    `json:"name"`
-	Description      string    `json:"description"`
-	AuthorID         string    `json:"author_id"`
+	Description      string    `json:"description" kit:"body"`
+	AuthorID         string    `json:"author_id" kit:"link,kind=goodreads/author,optional"`
 	AuthorName       string    `json:"author_name"`
 	TotalBooks       int       `json:"total_books"`
 	PrimaryWorkCount int       `json:"primary_work_count"`
-	BookIDs          []string  `json:"book_ids"`
+	BookIDs          []string  `json:"book_ids" kit:"link,kind=goodreads/book,optional"`
 	URL              string    `json:"url"`
 	FetchedAt        time.Time `json:"fetched_at"`
 }
@@ -85,15 +85,15 @@ type SeriesBook struct {
 
 // List is a Goodreads Listopia list (/list/show/<id>).
 type List struct {
-	ListID          string    `json:"list_id"`
+	ListID          string    `json:"list_id" kit:"id"`
 	Name            string    `json:"name"`
-	Description     string    `json:"description"`
+	Description     string    `json:"description" kit:"body"`
 	BooksCount      int       `json:"books_count"`
 	VotersCount     int       `json:"voters_count"`
 	LikesCount      int       `json:"likes_count"`
 	Tags            []string  `json:"tags"`
 	CreatedByUser   string    `json:"created_by_user"`
-	CreatedByUserID string    `json:"created_by_user_id"`
+	CreatedByUserID string    `json:"created_by_user_id" kit:"link,kind=goodreads/user,optional"`
 	CreatedDate     string    `json:"created_date"`
 	URL             string    `json:"url"`
 	FetchedAt       time.Time `json:"fetched_at"`
@@ -113,12 +113,12 @@ type ListBook struct {
 
 // Review is a Goodreads book review.
 type Review struct {
-	ReviewID   string    `json:"review_id"`
-	BookID     string    `json:"book_id"`
-	UserID     string    `json:"user_id"`
+	ReviewID   string    `json:"review_id" kit:"id"`
+	BookID     string    `json:"book_id" kit:"link,kind=goodreads/book"`
+	UserID     string    `json:"user_id" kit:"link,kind=goodreads/user,optional"`
 	UserName   string    `json:"user_name"`
 	Rating     int       `json:"rating"`
-	Text       string    `json:"text"`
+	Text       string    `json:"text" kit:"body"`
 	DateAdded  time.Time `json:"date_added"`
 	LikesCount int       `json:"likes_count"`
 	IsSpoiler  bool      `json:"is_spoiler"`
@@ -128,11 +128,11 @@ type Review struct {
 
 // Quote is a Goodreads quote.
 type Quote struct {
-	QuoteID    string    `json:"quote_id"`
-	Text       string    `json:"text"`
-	AuthorID   string    `json:"author_id"`
+	QuoteID    string    `json:"quote_id" kit:"id"`
+	Text       string    `json:"text" kit:"body"`
+	AuthorID   string    `json:"author_id" kit:"link,kind=goodreads/author,optional"`
 	AuthorName string    `json:"author_name"`
-	BookID     string    `json:"book_id"`
+	BookID     string    `json:"book_id" kit:"link,kind=goodreads/book,optional"`
 	BookTitle  string    `json:"book_title"`
 	WorkID     string    `json:"work_id"`
 	LikesCount int       `json:"likes_count"`
@@ -143,7 +143,7 @@ type Quote struct {
 
 // User is a public Goodreads reader profile (/user/show/<id>).
 type User struct {
-	UserID         string    `json:"user_id"`
+	UserID         string    `json:"user_id" kit:"id"`
 	Name           string    `json:"name"`
 	Username       string    `json:"username"`
 	Location       string    `json:"location"`
@@ -154,32 +154,32 @@ type User struct {
 	RatingsCount   int       `json:"ratings_count"`
 	ReviewsCount   int       `json:"reviews_count"`
 	AvgRating      float64   `json:"avg_rating"`
-	Bio            string    `json:"bio"`
+	Bio            string    `json:"bio" kit:"body"`
 	Website        string    `json:"website"`
 	AvatarURL      string    `json:"avatar_url"`
 
-	FavoriteBookIDs         []string  `json:"favorite_book_ids"`
-	CurrentlyReadingBookIDs []string  `json:"currently_reading_book_ids"`
+	FavoriteBookIDs         []string  `json:"favorite_book_ids" kit:"link,kind=goodreads/book,optional"`
+	CurrentlyReadingBookIDs []string  `json:"currently_reading_book_ids" kit:"link,kind=goodreads/book,optional"`
 	URL                     string    `json:"url"`
 	FetchedAt               time.Time `json:"fetched_at"`
 }
 
 // Genre is a Goodreads genre/taxonomy node (/genres/<slug>).
 type Genre struct {
-	Slug          string    `json:"slug"`
+	Slug          string    `json:"slug" kit:"id"`
 	Name          string    `json:"name"`
-	Description   string    `json:"description"`
+	Description   string    `json:"description" kit:"body"`
 	BooksCount    int       `json:"books_count"`
-	BookIDs       []string  `json:"book_ids"`
-	RelatedGenres []string  `json:"related_genres"`
+	BookIDs       []string  `json:"book_ids" kit:"link,kind=goodreads/book,optional"`
+	RelatedGenres []string  `json:"related_genres" kit:"link,kind=goodreads/genre,optional"`
 	URL           string    `json:"url"`
 	FetchedAt     time.Time `json:"fetched_at"`
 }
 
 // Shelf is a user's named reading shelf.
 type Shelf struct {
-	ShelfID    string    `json:"shelf_id"` // "<user_id>/<shelf_name>"
-	UserID     string    `json:"user_id"`
+	ShelfID    string    `json:"shelf_id" kit:"id"` // "<user_id>/<shelf_name>"
+	UserID     string    `json:"user_id" kit:"link,kind=goodreads/user"`
 	Name       string    `json:"name"`
 	BooksCount int       `json:"books_count"`
 	URL        string    `json:"url"`
