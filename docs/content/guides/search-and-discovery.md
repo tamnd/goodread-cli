@@ -56,6 +56,13 @@ A list is named by its id (which includes the slug) or URL. The header carries
 `list_id`, `name`, `description`, `books_count`, `voters_count`, `tags`, and
 `created_by_user`. With `--books` you get one row per book.
 
+Lists hold 100 books per page. `--max-pages N` walks that many (default 1, `0`
+for the whole list):
+
+```bash
+goodread list 1.Best_Books_Ever --books --max-pages 5
+```
+
 ## Classify a URL or id
 
 `id` turns a URL or bare id into an (entity, id) pair without fetching anything.

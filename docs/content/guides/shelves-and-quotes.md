@@ -56,6 +56,13 @@ goodread quote https://www.goodreads.com/work/quotes/2792775   # a work's quotes
 Each quote carries `quote_id`, `text`, `author_id`, `author_name`, `book_id`,
 `book_title`, `likes_count`, and `tags`.
 
+Quote pages hold 30 quotes each. `--max-pages N` walks that many pages (default
+1, `0` for every page):
+
+```bash
+goodread quote 153394 --max-pages 3
+```
+
 ## Reader profiles
 
 ```bash

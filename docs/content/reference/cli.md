@@ -78,25 +78,29 @@ goodread series 73758 --books
 ## list
 
 ```
-goodread list <id|url> [--books]
+goodread list <id|url> [--books] [--max-pages N]
 ```
 
-A Listopia list header, or its books with `--books`.
+A Listopia list header, or its books with `--books`. Lists hold 100 books per
+page; `--max-pages N` walks that many (default 1, `0` for the whole list).
 
 ```bash
 goodread list 1.Best_Books_Ever --books
+goodread list 1.Best_Books_Ever --books --max-pages 3
 ```
 
 ## quote
 
 ```
-goodread quote <url|author-id|book-id>
+goodread quote <url|author-id|book-id> [--max-pages N]
 ```
 
-Quotes from a quotes-page URL, an author id, or a book id.
+Quotes from a quotes-page URL, an author id, or a book id. Quote pages hold 30
+per page; `--max-pages N` walks that many (default 1, `0` for all).
 
 ```bash
 goodread quote https://www.goodreads.com/work/quotes/2792775
+goodread quote 153394 --max-pages 3
 ```
 
 ## user

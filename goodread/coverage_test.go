@@ -296,3 +296,48 @@ func TestParseAuthorDataRows(t *testing.T) {
 		t.Errorf("counts = books %d followers %d", a.BooksCount, a.FollowersCount)
 	}
 }
+
+func TestParseListNextPage(t *testing.T) {
+	// A list page carries two "next" links: the books pager and the comments
+	// thread pager. Only the /list/show/ one must be followed.
+	const html = `<html><body>
+<div class="pagination">
+  <a class="next_page" rel="next" href="/list/show/1.Best_Books_Ever?page=2">next &raquo;</a>
+</div>
+<div id="comments">
+  <a class="next_page" rel="next" href="/list/comments/1.Best_Books_Ever?page=2">next</a>
+</div>
+</body></html>`
+	got := ParseListNextPage(mustDoc(t, html))
+	want := "https://www.goodreads.com/list/show/1.Best_Books_Ever?page=2"
+	if got != want {
+		t.Errorf("ParseListNextPage = %q, want %q", got, want)
+	}
+}
+
+func TestParseListNextPageLast(t *testing.T) {
+	// The final list page has no books pager, only the comments one. We must
+	// not mistake the comments link for more books.
+	const html = `<html><body>
+<div id="comments">
+  <a class="next_page" rel="next" href="/list/comments/1.Best_Books_Ever?page=5">next</a>
+</div>
+</body></html>`
+	if got := ParseListNextPage(mustDoc(t, html)); got != "" {
+		t.Errorf("ParseListNextPage = %q, want \"\" (comments link is not a books pager)", got)
+	}
+}
+
+func TestParseQuotesNextPage(t *testing.T) {
+	const html = `<html><body>
+<a class="next_page" rel="next" href="/author/quotes/153394.Suzanne_Collins?page=2">next &raquo;</a>
+</body></html>`
+	got := ParseQuotesNextPage(mustDoc(t, html))
+	want := "https://www.goodreads.com/author/quotes/153394.Suzanne_Collins?page=2"
+	if got != want {
+		t.Errorf("ParseQuotesNextPage = %q, want %q", got, want)
+	}
+	if got := ParseQuotesNextPage(mustDoc(t, "<html><body></body></html>")); got != "" {
+		t.Errorf("ParseQuotesNextPage on last page = %q, want \"\"", got)
+	}
+}
