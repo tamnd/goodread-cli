@@ -37,8 +37,12 @@ type ScrapedBook struct {
 	FetchedAt          time.Time `json:"fetched_at"`
 }
 
-// Author is a Goodreads author page (/author/show/<id>).
-type Author struct {
+// ScrapedAuthor is the v0.2.0 author record, read from the rendered page.
+//
+// Author is the v0.3.0 record. This one stays because the v0.2.0 commands
+// still read it and because nothing that already parses this output should
+// have to change on an upgrade.
+type ScrapedAuthor struct {
 	AuthorID       string    `json:"author_id" kit:"id"`
 	Name           string    `json:"name"`
 	Bio            string    `json:"bio" kit:"body"`
@@ -59,8 +63,9 @@ type Author struct {
 	FetchedAt      time.Time `json:"fetched_at"`
 }
 
-// Series is a Goodreads book series (/series/<id>).
-type Series struct {
+// ScrapedSeries is the v0.2.0 series record. See ScrapedAuthor for why it is
+// still here.
+type ScrapedSeries struct {
 	SeriesID         string    `json:"series_id" kit:"id"`
 	Name             string    `json:"name"`
 	Description      string    `json:"description" kit:"body"`
@@ -83,8 +88,9 @@ type SeriesBook struct {
 	PositionLabel string `json:"position_label"`
 }
 
-// List is a Goodreads Listopia list (/list/show/<id>).
-type List struct {
+// ScrapedList is the v0.2.0 Listopia record. See ScrapedAuthor for why it is
+// still here.
+type ScrapedList struct {
 	ListID          string    `json:"list_id" kit:"id"`
 	Name            string    `json:"name"`
 	Description     string    `json:"description" kit:"body"`
@@ -126,8 +132,9 @@ type ScrapedReview struct {
 	FetchedAt  time.Time `json:"fetched_at"`
 }
 
-// Quote is a Goodreads quote.
-type Quote struct {
+// ScrapedQuote is the v0.2.0 quote record. See ScrapedAuthor for why the
+// v0.2.0 records keep their names in this package.
+type ScrapedQuote struct {
 	QuoteID    string    `json:"quote_id" kit:"id"`
 	Text       string    `json:"text" kit:"body"`
 	AuthorID   string    `json:"author_id" kit:"link,kind=goodreads/author,optional"`
@@ -164,8 +171,9 @@ type ScrapedUser struct {
 	FetchedAt               time.Time `json:"fetched_at"`
 }
 
-// Genre is a Goodreads genre/taxonomy node (/genres/<slug>).
-type Genre struct {
+// ScrapedGenre is the v0.2.0 genre record. See ScrapedAuthor for why it is
+// still here.
+type ScrapedGenre struct {
 	Slug          string    `json:"slug" kit:"id"`
 	Name          string    `json:"name"`
 	Description   string    `json:"description" kit:"body"`

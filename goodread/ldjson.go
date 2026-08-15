@@ -98,3 +98,26 @@ func TitleWithoutSeries(s string) string {
 	}
 	return strings.TrimSpace(s[:i])
 }
+
+// metaNameRe finds name= meta tags in either attribute order.
+//
+// Separate from ogRe because the Rails surfaces do not all carry og:. The list
+// page states its title and its size in twitter:title and nowhere else that is
+// not a rendered heading, so on that page this is the whole of level 2.
+var metaNameRe = regexp.MustCompile(`<meta[^>]*(?:name=["']([a-zA-Z_:-]+)["'][^>]*content=["']([^"']*)["']|content=["']([^"']*)["'][^>]*name=["']([a-zA-Z_:-]+)["'])[^>]*>`)
+
+// parseMetaNames reads the name= meta tags, including the twitter: ones.
+func parseMetaNames(body []byte) map[string]string {
+	out := map[string]string{}
+	for _, m := range metaNameRe.FindAllSubmatch(body, -1) {
+		key, val := string(m[1]), string(m[2])
+		if key == "" {
+			key, val = string(m[4]), string(m[3])
+		}
+		if key == "" {
+			continue
+		}
+		out[key] = html.UnescapeString(val)
+	}
+	return out
+}
