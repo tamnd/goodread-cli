@@ -119,7 +119,10 @@ func NewRootCmd() *cobra.Command {
 	pf.CountVarP(&app.verbose, "verbose", "v", "explain what is being read. -vv adds every request and the extraction ladder")
 	pf.StringVar(&app.depthArg, "depth", string(goodread.DepthMeta), "how much to read: "+depthList())
 
-	pf.IntVar(&app.cfg.Workers, "workers", goodread.DefaultWorkers, "concurrent workers for bulk/crawl")
+	// There is no --workers, and there was one in v0.2.0. It was clamped to
+	// MaxWorkers, which is 1, so it did nothing except suggest the tool could
+	// be told to open ten connections. A flag that does nothing but imply that
+	// is worse than no flag, and 05_commands.md section 6 asks for no flag.
 	pf.DurationVar(&app.cfg.Delay, "delay", goodread.DefaultDelay, "minimum spacing between requests")
 	pf.DurationVar(&app.cfg.Timeout, "timeout", goodread.DefaultTimeout, "per-request timeout")
 	pf.IntVar(&app.cfg.Retries, "retries", goodread.DefaultRetries, "retry attempts on 429/5xx")
@@ -138,6 +141,7 @@ func NewRootCmd() *cobra.Command {
 
 	root.AddCommand(
 		app.bookCmd(),
+		app.workCmd(),
 		app.authorCmd(),
 		app.seriesCmd(),
 		app.listCmd(),
@@ -157,6 +161,7 @@ func NewRootCmd() *cobra.Command {
 		app.idCmd(),
 		app.seedCmd(),
 		app.crawlCmd(),
+		app.mcpCmd(),
 		app.dbCmd(),
 		app.openCmd(),
 		app.cacheCmd(),
@@ -197,9 +202,10 @@ func (a *App) setup(cmd *cobra.Command) error {
 			a.cfg.Delay, goodread.MinDelay, d)
 		a.cfg.Delay = d
 	}
+	// Nothing sets this from the command line any more, and the clamp stays
+	// because Config is importable and a caller of the library can still put a
+	// number in it.
 	if a.cfg.Workers > goodread.MaxWorkers {
-		fmt.Fprintf(os.Stderr, "note: --workers %d exceeds the maximum of %d, using %d\n",
-			a.cfg.Workers, goodread.MaxWorkers, goodread.MaxWorkers)
 		a.cfg.Workers = goodread.MaxWorkers
 	}
 
