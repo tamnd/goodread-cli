@@ -47,6 +47,11 @@ Every record carries provenance, and the JSON formats show all of it.
 | `via` | Which surface each field came from |
 | `level` | Which rung of the ladder answered for each field |
 | `missed` | Plain sentences about what the page did not carry |
+| `robots` | Present only when the page was one robots.txt asked us not to read |
+
+A record read under `--no-robots` carries a `robots` block with `allowed: false`, the path, the rule from the file that matched it, and which robots.txt said so.
+A record with no `robots` block came off an allowed surface, so a consumer can tell the two apart without knowing which flags the run used.
+Reviews carry the block on the row rather than on an envelope, because `reviews --all` returns the book page's sample and the walked pages in one list and the note is what keeps them distinguishable.
 
 The levels are `1` for the `__NEXT_DATA__` Apollo cache, `2` for `application/ld+json` and `og:` tags, and `3` for a CSS selector over the rendered HTML.
 

@@ -20,7 +20,7 @@ type BookRecord struct {
 // This is the v0.3.0 path. GetBook is still the v0.2.0 one and still returns a
 // ScrapedBook, and the two live side by side until the commands are ported.
 func (c *Client) GetBookRecord(ctx context.Context, id string, depth Depth) (*BookRecord, error) {
-	u := BookURL(id)
+	u := c.site(BookURL(id))
 	body, code, err := c.Fetch(ctx, u)
 	if err != nil {
 		return nil, err
@@ -41,6 +41,13 @@ func (c *Client) GetBookRecord(ctx context.Context, id string, depth Depth) (*Bo
 	rec := &BookRecord{Book: b}
 	if w, ok := WorkFrom(e, now); ok {
 		rec.Work = w
+	}
+	// Both envelopes, because the work on a book record was read off the book
+	// page too. A work that came through a disallowed read is no more allowed
+	// than the book it was carried by.
+	c.stamp(&rec.Book.Envelope, u)
+	if rec.Work != nil {
+		c.stamp(&rec.Work.Envelope, u)
 	}
 
 	// full and deep read further surfaces, and neither is wired up yet. Saying

@@ -237,7 +237,10 @@ release:
 
     `--no-robots` is there for a person who has decided it is their call. It
     warns once, the pace floor still applies, it has no config key and no
-    environment variable, and a crawl with it needs `--yes` as well.
+    environment variable, and a crawl with it needs `--yes` as well. What it
+    reads comes back marked: a record built from a disallowed page carries a
+    `robots` block with `allowed: false` and the rule that matched it, so the
+    data stays marked long after the shell history is gone.
 
     ### A graph, and SQL over it
 

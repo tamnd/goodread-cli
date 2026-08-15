@@ -36,11 +36,30 @@ type Client struct {
 	warnTo    io.Writer
 	crawlWait time.Duration
 
+	// overrides remembers every path the override let through, keyed by path,
+	// so the record built from one can say so. It is kept on the client rather
+	// than threaded through the extractors because permission is a property of
+	// the fetch and the extractors never see a URL's verdict.
+	overrideMu sync.Mutex
+	overrides  map[string]RobotsNote
+
 	// base is the site root. It exists so tests can exercise Do end to end
 	// against a local server rather than against goodreads.com, which is the
 	// only way to assert what the override does without actually doing it to
 	// somebody's site.
 	base string
+}
+
+// site points a URL built by the package's URL helpers at this client's base.
+//
+// The helpers hardcode BaseURL, which is right everywhere except under a test
+// server, where it means the request leaves for goodreads.com whatever
+// SetBaseURL said. In production c.base is BaseURL and this changes nothing.
+func (c *Client) site(u string) string {
+	if c.base == "" || c.base == BaseURL {
+		return u
+	}
+	return c.base + strings.TrimPrefix(u, BaseURL)
 }
 
 // SetBaseURL points the client at a different origin, for tests.
@@ -164,6 +183,7 @@ func (c *Client) check(ctx context.Context, rawurl string) error {
 			}
 			return e
 		}
+		c.record(target, *rule, r.Source)
 		c.warn(target, *rule)
 	}
 
@@ -218,6 +238,50 @@ func opForPath(path string) (Op, bool) {
 		}
 	}
 	return best, bestLen >= 0
+}
+
+// record keeps the verdict on a path the override let through.
+func (c *Client) record(path string, rule Rule, source string) {
+	c.overrideMu.Lock()
+	defer c.overrideMu.Unlock()
+	if c.overrides == nil {
+		c.overrides = map[string]RobotsNote{}
+	}
+	c.overrides[pathOnly(path)] = RobotsNote{
+		Allowed: false,
+		Path:    pathOnly(path),
+		Rule:    rule.String(),
+		Source:  source,
+	}
+}
+
+// Overridden reports the robots.txt verdict on a path this client read under
+// --no-robots, and reports false for a path that was allowed.
+func (c *Client) Overridden(rawurl string) (RobotsNote, bool) {
+	target, ok := c.samePath(rawurl)
+	if !ok {
+		return RobotsNote{}, false
+	}
+	c.overrideMu.Lock()
+	defer c.overrideMu.Unlock()
+	n, ok := c.overrides[pathOnly(target)]
+	return n, ok
+}
+
+// stamp marks a record's envelope when the page behind it was disallowed.
+//
+// It is a no-op for an allowed page, which is what lets every record builder
+// call it unconditionally. A surface that becomes disallowed on a later reading
+// of robots.txt then starts carrying the note with no further code, which is
+// the point: nothing has to remember which four surfaces are the awkward ones.
+func (c *Client) stamp(env *Envelope, rawurl string) {
+	if env == nil {
+		return
+	}
+	if n, ok := c.Overridden(rawurl); ok {
+		note := n
+		env.Robots = &note
+	}
 }
 
 // warn prints the override notice once per process, on stderr, so a pipe is
