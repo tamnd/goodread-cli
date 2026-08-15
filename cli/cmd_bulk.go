@@ -186,10 +186,10 @@ func (a *App) crawlCmd() *cobra.Command {
 			stats, _ := st.QueueStats()
 			fmt.Printf("done: processed=%d failed=%d queue=%v\n", processed, failed, stats)
 			if processed == 0 {
-				return codeError(exitNoData, nil)
+				return codeError(exitNotFound, nil)
 			}
 			if failed > 0 {
-				return codeError(exitPartial, nil)
+				return codeError(exitParse, nil)
 			}
 			return nil
 		},
@@ -360,7 +360,7 @@ func (a *App) dbExportCmd() *cobra.Command {
 			}
 			a.progressf("exported %d records (%s)", n, format)
 			if n == 0 {
-				return codeError(exitNoData, nil)
+				return codeError(exitNotFound, nil)
 			}
 			return nil
 		},

@@ -166,7 +166,7 @@ func (a *App) verifyCmd() *cobra.Command {
 				return err
 			}
 			if bad > 0 && strict {
-				return codeError(exitPartial, fmt.Errorf("%d capture(s) lost a known field", bad))
+				return codeError(exitParse, fmt.Errorf("%d capture(s) lost a known field", bad))
 			}
 			return nil
 		},

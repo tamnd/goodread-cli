@@ -299,3 +299,49 @@ func ratingSuffix(avg *float64, count *int64) string {
 	}
 	return fmt.Sprintf("  %.2f (%s)", *avg, comma(*count))
 }
+
+func printShelf(w io.Writer, s *goodread.ShelfRecord) {
+	fmt.Fprintf(w, "%s, %s\n\n", s.User.Label(), s.Name)
+
+	line(w, "id", s.ID)
+	// Named every time. The rss feed and the html shelf carry different fields,
+	// so a row with no isbn means "the feed had none" on one route and "the page
+	// never prints it" on the other.
+	line(w, "read over", shelfRoute(s.Source == "html"))
+	if s.TotalCount != nil {
+		line(w, "books", comma(*s.TotalCount))
+	}
+	line(w, "loaded", fmt.Sprintf("%d", s.Loaded))
+	line(w, "url", s.WebURL)
+	fmt.Fprintln(w)
+
+	for _, b := range s.Books {
+		var by string
+		if len(b.Contributors) > 0 {
+			by = " by " + b.Contributors[0].Name
+		}
+		fmt.Fprintf(w, "  %s%s\n", b.Title, by)
+		var bits []string
+		if b.Rating != nil {
+			// Theirs, and said so. An average of 4.35 and one person's 3 are
+			// both "the rating" until somebody labels them.
+			bits = append(bits, fmt.Sprintf("rated %d by them", *b.Rating))
+		}
+		if b.AverageRating != nil {
+			bits = append(bits, fmt.Sprintf("%.2f average", *b.AverageRating))
+		}
+		if b.DateRead != nil {
+			bits = append(bits, "read "+b.DateRead.Format("2006-01-02"))
+		} else if b.DateAdded != nil {
+			bits = append(bits, "added "+b.DateAdded.Format("2006-01-02"))
+		}
+		if len(b.Shelves) > 0 {
+			bits = append(bits, strings.Join(b.Shelves, ", "))
+		}
+		if len(bits) > 0 {
+			fmt.Fprintf(w, "    %s\n", strings.Join(bits, " · "))
+		}
+	}
+
+	printNotRead(w, s.Missed)
+}
