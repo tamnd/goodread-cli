@@ -246,6 +246,18 @@ func contributorsFromFields(e *Extractor) []Contributor {
 	}
 	for i := range out {
 		out[i].Via = e.Surface
+		// The cache keys contributors by their kca id and states the legacy one
+		// in the profile link. 04_graph.md keeps both id spaces because neither
+		// is derivable from the other, and here the page has said both, so
+		// leaving legacy_id at zero would be dropping a fact that is on the
+		// page and making every reader parse the URL back out again.
+		if out[i].LegacyID == 0 && out[i].WebURL != "" {
+			if ent, id := Classify(out[i].WebURL); ent == "author" {
+				if n, err := strconv.ParseInt(id, 10, 64); err == nil {
+					out[i].LegacyID = n
+				}
+			}
+		}
 	}
 	return out
 }

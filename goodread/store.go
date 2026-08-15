@@ -62,11 +62,20 @@ CREATE TABLE IF NOT EXISTS queue (
 );
 CREATE INDEX IF NOT EXISTS idx_queue_status ON queue(status, priority DESC, id);
 `
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	return s.migrateGraph()
 }
 
-// Put upserts a record keyed by (entityType, id).
+// Put upserts a record keyed by (entityType, id), and folds it into the graph.
+//
+// Two writes, and the graph one is deliberately quiet. The records table is
+// what the command asked for and its failure is worth reporting; the node and
+// edge tables are an index over the same bytes, and a record whose shape this
+// version does not recognise should cost a worse search later rather than a
+// failed read now. IndexRecord is exported so a store test can see the error
+// this swallows.
 func (s *Store) Put(entityType, id, url string, record any) error {
 	data, err := json.Marshal(record)
 	if err != nil {
@@ -76,7 +85,11 @@ func (s *Store) Put(entityType, id, url string, record any) error {
 		`INSERT INTO records(entity_type,id,url,data) VALUES(?,?,?,?)
 		 ON CONFLICT(entity_type,id) DO UPDATE SET url=excluded.url, data=excluded.data, fetched_at=datetime('now')`,
 		entityType, id, url, string(data))
-	return err
+	if err != nil {
+		return err
+	}
+	_ = s.IndexRecord(entityType, id, url, data)
+	return nil
 }
 
 // Get reads a record's raw JSON by (entityType, id).
