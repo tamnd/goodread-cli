@@ -149,6 +149,7 @@ func NewRootCmd() *cobra.Command {
 		app.searchCmd(),
 		app.lookupCmd(),
 		app.findCmd(),
+		app.queryCmd(),
 		app.reviewsCmd(),
 		app.similarCmd(),
 		app.idCmd(),

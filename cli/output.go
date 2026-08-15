@@ -192,11 +192,28 @@ func (r *Renderer) columns(items []any) []string {
 	if len(items) == 0 {
 		return nil
 	}
+	if row, ok := items[0].(Rowed); ok {
+		return row.Columns()
+	}
 	return structJSONKeys(items[0])
+}
+
+// Rowed is a record that names its own columns.
+//
+// One case needs it: `goodread query` hands back whatever the statement asked
+// for, and the column set is not known until the statement has run, so there is
+// no struct for reflection to read. Everything else still goes through the
+// json tags.
+type Rowed interface {
+	Columns() []string
+	Cells() map[string]string
 }
 
 // toMap renders a record into a flat map of json-key -> display string.
 func toMap(v any) map[string]string {
+	if row, ok := v.(Rowed); ok {
+		return row.Cells()
+	}
 	out := map[string]string{}
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Pointer {
