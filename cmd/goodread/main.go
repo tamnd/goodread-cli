@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -21,6 +22,11 @@ func main() {
 	err := fang.Execute(ctx, root,
 		fang.WithVersion(cli.Version),
 		fang.WithNotifySignal(os.Interrupt, syscall.SIGTERM),
+		// Errors are printed below, once, verbatim. fang's default handler
+		// reflows and title-cases them, which turns a refusal that quotes a
+		// robots.txt rule into "/Search is disallowed" on one long line. These
+		// messages are written to be read as written.
+		fang.WithErrorHandler(func(io.Writer, fang.Styles, error) {}),
 	)
 	if err == nil {
 		return
