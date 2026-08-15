@@ -22,7 +22,7 @@ func (c *Client) GetBook(ctx context.Context, id string) (*ScrapedBook, error) {
 }
 
 // GetAuthor fetches and parses an author page by id.
-func (c *Client) GetAuthor(ctx context.Context, id string) (*Author, error) {
+func (c *Client) GetAuthor(ctx context.Context, id string) (*ScrapedAuthor, error) {
 	u := AuthorURL(id)
 	doc, code, err := c.FetchHTML(ctx, u)
 	if err != nil {
@@ -35,7 +35,7 @@ func (c *Client) GetAuthor(ctx context.Context, id string) (*Author, error) {
 }
 
 // GetSeries fetches and parses a series page by id.
-func (c *Client) GetSeries(ctx context.Context, id string) (*Series, []SeriesBook, error) {
+func (c *Client) GetSeries(ctx context.Context, id string) (*ScrapedSeries, []SeriesBook, error) {
 	u := SeriesURL(id)
 	doc, code, err := c.FetchHTML(ctx, u)
 	if err != nil {
@@ -48,7 +48,7 @@ func (c *Client) GetSeries(ctx context.Context, id string) (*Series, []SeriesBoo
 }
 
 // GetList fetches and parses a Listopia list by id (keeps "<num>.<slug>").
-func (c *Client) GetList(ctx context.Context, id string) (*List, []ListBook, error) {
+func (c *Client) GetList(ctx context.Context, id string) (*ScrapedList, []ListBook, error) {
 	u := ListURL(id)
 	doc, code, err := c.FetchHTML(ctx, u)
 	if err != nil {
@@ -61,7 +61,7 @@ func (c *Client) GetList(ctx context.Context, id string) (*List, []ListBook, err
 }
 
 // GetGenre fetches and parses a genre page by slug.
-func (c *Client) GetGenre(ctx context.Context, slug string) (*Genre, error) {
+func (c *Client) GetGenre(ctx context.Context, slug string) (*ScrapedGenre, error) {
 	u := GenreURL(slug)
 	doc, code, err := c.FetchHTML(ctx, u)
 	if err != nil {
@@ -87,7 +87,7 @@ func (c *Client) GetUser(ctx context.Context, id string) (*ScrapedUser, error) {
 }
 
 // GetQuotes fetches and parses a quotes page (an author's or a book's quotes URL).
-func (c *Client) GetQuotes(ctx context.Context, pageURL string) ([]Quote, error) {
+func (c *Client) GetQuotes(ctx context.Context, pageURL string) ([]ScrapedQuote, error) {
 	doc, code, err := c.FetchHTML(ctx, pageURL)
 	if err != nil {
 		return nil, err

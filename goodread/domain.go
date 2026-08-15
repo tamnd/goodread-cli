@@ -130,7 +130,7 @@ func getBook(ctx context.Context, in oneRef, emit func(*ScrapedBook) error) erro
 	return emit(b)
 }
 
-func getAuthor(ctx context.Context, in oneRef, emit func(*Author) error) error {
+func getAuthor(ctx context.Context, in oneRef, emit func(*ScrapedAuthor) error) error {
 	a, err := in.Client.GetAuthor(ctx, refID(in.Ref))
 	if err != nil {
 		return mapErr(err)
@@ -138,7 +138,7 @@ func getAuthor(ctx context.Context, in oneRef, emit func(*Author) error) error {
 	return emit(a)
 }
 
-func getSeries(ctx context.Context, in oneRef, emit func(*Series) error) error {
+func getSeries(ctx context.Context, in oneRef, emit func(*ScrapedSeries) error) error {
 	s, _, err := in.Client.GetSeries(ctx, refID(in.Ref))
 	if err != nil {
 		return mapErr(err)
@@ -159,7 +159,7 @@ func listSeriesBooks(ctx context.Context, in oneRef, emit func(SeriesBook) error
 	return nil
 }
 
-func getList(ctx context.Context, in oneRef, emit func(*List) error) error {
+func getList(ctx context.Context, in oneRef, emit func(*ScrapedList) error) error {
 	l, _, err := in.Client.GetList(ctx, listID(in.Ref))
 	if err != nil {
 		return mapErr(err)
@@ -188,7 +188,7 @@ func getUser(ctx context.Context, in oneRef, emit func(*ScrapedUser) error) erro
 	return emit(u)
 }
 
-func getGenre(ctx context.Context, in oneRef, emit func(*Genre) error) error {
+func getGenre(ctx context.Context, in oneRef, emit func(*ScrapedGenre) error) error {
 	g, err := in.Client.GetGenre(ctx, genreSlug(in.Ref))
 	if err != nil {
 		return mapErr(err)
@@ -204,7 +204,7 @@ func getShelf(ctx context.Context, in shelfRef, emit func(*Shelf) error) error {
 	return emit(shelf)
 }
 
-func getQuotes(ctx context.Context, in oneRef, emit func(Quote) error) error {
+func getQuotes(ctx context.Context, in oneRef, emit func(ScrapedQuote) error) error {
 	quotes, err := in.Client.GetQuotes(ctx, quotesURL(in.Ref))
 	if err != nil {
 		return mapErr(err)

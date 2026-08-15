@@ -3,6 +3,7 @@ package goodread
 import (
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -167,4 +168,52 @@ func itoa(n int) string {
 		b[i] = '-'
 	}
 	return string(b[i:])
+}
+
+// EditionsURL builds a work's editions page. The id is a work id and not a book
+// id, which is the single most common way to get a 404 out of this surface.
+func EditionsURL(workID string, page int) string {
+	u := BaseURL + "/work/editions/" + numericPrefix(workID)
+	if page > 1 {
+		u += "?page=" + strconv.Itoa(page)
+	}
+	return u
+}
+
+// WorkQuotesURL builds a work's quotes page, also keyed by work and not book.
+func WorkQuotesURL(workID string, page int) string {
+	u := BaseURL + "/work/quotes/" + numericPrefix(workID)
+	if page > 1 {
+		u += "?page=" + strconv.Itoa(page)
+	}
+	return u
+}
+
+// AuthorQuotesURL is the other half of s7.
+//
+// Two URLs render the same markup around a different subject, so both are built
+// here and the extractor tells them apart by the path it was handed.
+func AuthorQuotesURL(authorID string, page int) string {
+	u := BaseURL + "/author/quotes/" + numericPrefix(authorID)
+	if page > 1 {
+		u += "?page=" + strconv.Itoa(page)
+	}
+	return u
+}
+
+// pathSegmentAfter returns the whole path segment following a prefix.
+//
+// Different from extractIDFromPath, which takes the numeric prefix of that
+// segment. Some ids are the whole segment: /list/show/1.Best_Books_Ever needs
+// its slug because the bare /list/show/1 redirects rather than answering.
+func pathSegmentAfter(s, prefix string) string {
+	i := strings.Index(s, prefix)
+	if i < 0 {
+		return ""
+	}
+	seg := s[i+len(prefix):]
+	if j := strings.IndexAny(seg, "/?#"); j >= 0 {
+		seg = seg[:j]
+	}
+	return seg
 }

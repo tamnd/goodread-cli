@@ -170,8 +170,8 @@ type authorJSONLD struct {
 }
 
 // ParseAuthor parses a Goodreads author page.
-func ParseAuthor(doc *goquery.Document, authorID, pageURL string) (*Author, error) {
-	a := &Author{AuthorID: authorID, URL: pageURL, FetchedAt: time.Now()}
+func ParseAuthor(doc *goquery.Document, authorID, pageURL string) (*ScrapedAuthor, error) {
+	a := &ScrapedAuthor{AuthorID: authorID, URL: pageURL, FetchedAt: time.Now()}
 
 	doc.Find(`script[type="application/ld+json"]`).Each(func(_ int, sel *goquery.Selection) {
 		if a.Name != "" {
@@ -316,8 +316,8 @@ type seriesListProps struct {
 // whose data lives in data-react-props attributes (SeriesHeader for the title,
 // subtitle, and description; one or more SeriesList blocks for the books), with
 // a visible-text fallback for the rare page that lacks them.
-func ParseSeries(doc *goquery.Document, seriesID, pageURL string) (*Series, []SeriesBook, error) {
-	s := &Series{SeriesID: seriesID, URL: pageURL, FetchedAt: time.Now()}
+func ParseSeries(doc *goquery.Document, seriesID, pageURL string) (*ScrapedSeries, []SeriesBook, error) {
+	s := &ScrapedSeries{SeriesID: seriesID, URL: pageURL, FetchedAt: time.Now()}
 
 	if props, ok := reactProps(doc, "ReactComponents.SeriesHeader"); ok {
 		var h seriesHeaderProps
@@ -405,8 +405,8 @@ var (
 // ParseList parses a Listopia list page. The list title, books count, voters,
 // creator, and tags live in the ".stacked" footer block; each book row is a
 // schema.org/Book table row carrying rank, rating, score, and votes.
-func ParseList(doc *goquery.Document, listID, pageURL string) (*List, []ListBook, error) {
-	l := &List{ListID: listID, URL: pageURL, FetchedAt: time.Now()}
+func ParseList(doc *goquery.Document, listID, pageURL string) (*ScrapedList, []ListBook, error) {
+	l := &ScrapedList{ListID: listID, URL: pageURL, FetchedAt: time.Now()}
 
 	// The page <title> is "Name (N books)"; the visible h1 is the score-tooltip
 	// header, so it must not be used for the name.
@@ -508,8 +508,8 @@ func ParseList(doc *goquery.Document, listID, pageURL string) (*List, []ListBook
 // hidden "freeText" span (the visible "freeTextContainer" is truncated), and
 // the genuine related genres are scoped to the "Related Genres" box so the
 // global genre nav does not leak in.
-func ParseGenre(doc *goquery.Document, slug, pageURL string) (*Genre, error) {
-	g := &Genre{Slug: slug, URL: pageURL, FetchedAt: time.Now()}
+func ParseGenre(doc *goquery.Document, slug, pageURL string) (*ScrapedGenre, error) {
+	g := &ScrapedGenre{Slug: slug, URL: pageURL, FetchedAt: time.Now()}
 	g.Name = strings.TrimSpace(doc.Find("h1, [data-testid='genreTitle']").First().Text())
 	if g.Name == "" {
 		g.Name = strings.ReplaceAll(slug, "-", " ")
@@ -560,7 +560,7 @@ var (
 // .quoteFooter blocks are flat siblings (not nested per quote), so attribution,
 // the book link, likes, and tags are read from each quote's own subtree and its
 // immediately following footer, never from a shared parent.
-func ParseQuotes(doc *goquery.Document, pageURL string) ([]Quote, error) {
+func ParseQuotes(doc *goquery.Document, pageURL string) ([]ScrapedQuote, error) {
 	// The page belongs to one author; the header carries their id.
 	var pageAuthorID string
 	if a := doc.Find("a[href*='/author/show/']").First(); a.Length() > 0 {
@@ -568,9 +568,9 @@ func ParseQuotes(doc *goquery.Document, pageURL string) ([]Quote, error) {
 		pageAuthorID = numericPrefix(extractIDFromPath(href, "/author/show/"))
 	}
 
-	var quotes []Quote
+	var quotes []ScrapedQuote
 	doc.Find(".quoteText, [data-testid='quoteText']").Each(func(_ int, sel *goquery.Selection) {
-		q := Quote{URL: pageURL, AuthorID: pageAuthorID, FetchedAt: time.Now()}
+		q := ScrapedQuote{URL: pageURL, AuthorID: pageAuthorID, FetchedAt: time.Now()}
 		q.Text = cleanQuote(strings.TrimSpace(sel.Clone().Children().Remove().End().Text()))
 		if q.Text == "" {
 			q.Text = cleanQuote(sel.Text())
