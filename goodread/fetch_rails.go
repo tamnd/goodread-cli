@@ -132,3 +132,35 @@ func (c *Client) fetchPage(ctx context.Context, u string) ([]byte, error) {
 	}
 	return body, nil
 }
+
+// GetShelfRecord reads a user's shelf and returns it on the v0.3.0 model.
+//
+// Two routes, and the caller picks. RSS is the default everywhere it is offered
+// because it is small, stable and gives more per row than the rendered page
+// does. The HTML shelf is a megabyte of table and is worth walking only when
+// somebody wants the whole shelf rather than the feed's window.
+func (c *Client) GetShelfRecord(ctx context.Context, userID, shelfName string, useHTML bool, maxPages int) (*ShelfRecord, error) {
+	var (
+		shelf  *Shelf
+		rows   []ShelfBook
+		err    error
+		source = "rss"
+	)
+	if useHTML {
+		source = "html"
+		shelf, rows, err = c.GetShelf(ctx, userID, shelfName, maxPages)
+	} else {
+		shelf, rows, err = c.GetShelfRSS(ctx, userID, shelfName)
+	}
+	// Whatever was read before the error is still worth having. A walk that
+	// stopped on page nine of twenty has nine pages of real rows in it, and
+	// throwing them away costs the user nine requests they already spent.
+	if err != nil && len(rows) == 0 {
+		return nil, err
+	}
+	rec := ShelfFrom(shelf, rows, source, time.Now().UTC())
+	if err != nil {
+		rec.Missed = append(rec.Missed, "the read stopped early: "+err.Error())
+	}
+	return rec, nil
+}

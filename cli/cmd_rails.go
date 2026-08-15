@@ -51,7 +51,7 @@ func (a *App) authorCmd() *cobra.Command {
 				recs = append(recs, au)
 			}
 			if len(recs) == 0 {
-				return codeError(exitNoData, nil)
+				return codeError(exitNotFound, nil)
 			}
 			if booksOnly {
 				var cards []goodread.BookCard
@@ -261,7 +261,7 @@ func (a *App) editionPages(ctx context.Context, id string, page, maxPages int) (
 		}
 	}
 	if out == nil {
-		return nil, codeError(exitNoData, nil)
+		return nil, codeError(exitNotFound, nil)
 	}
 	if a.limit > 0 && len(out.Editions) > a.limit {
 		out.Editions = out.Editions[:a.limit]
@@ -344,7 +344,7 @@ func (a *App) quotePages(ctx context.Context, id string, byAuthor bool, page, ma
 		}
 	}
 	if out == nil {
-		return nil, codeError(exitNoData, nil)
+		return nil, codeError(exitNotFound, nil)
 	}
 	if a.limit > 0 && len(out.Quotes) > a.limit {
 		out.Quotes = out.Quotes[:a.limit]

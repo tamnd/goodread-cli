@@ -43,7 +43,7 @@ func (a *App) lookupRun(ctx context.Context, q string, idsOnly bool) error {
 		// that searched one endpoint means something narrower than it sounds.
 		fmt.Fprintf(os.Stderr,
 			"nothing matched %q on /book/auto_complete. a title works better than a bare ISBN10, and --no-robots with `goodread search --deep` reads the search page.\n", q)
-		return codeError(exitNoData, nil)
+		return codeError(exitNotFound, nil)
 	}
 
 	if idsOnly {
@@ -94,7 +94,7 @@ func (a *App) findCmd() *cobra.Command {
 			if len(rows) == 0 {
 				fmt.Fprintf(os.Stderr,
 					"nothing in the local store matches %q. find reads nothing from the network, so a book has to be crawled before it can be found.\n", q)
-				return codeError(exitNoData, nil)
+				return codeError(exitNotFound, nil)
 			}
 			return a.renderOrEmpty(rows, len(rows))
 		},

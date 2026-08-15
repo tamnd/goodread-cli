@@ -127,6 +127,11 @@ func SurfaceSource(surface string) string {
 		return "XML sitemap"
 	case "s9":
 		return "plain text"
+	case "s11":
+		// Says nothing about which of the two routes was taken, on purpose. The
+		// record's Source field answers that, and a source string that guessed
+		// would be wrong half the time.
+		return "RSS feed, or Rails HTML"
 	case "s14":
 		return "public JSON"
 	default:

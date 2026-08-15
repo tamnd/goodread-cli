@@ -39,21 +39,29 @@ type App struct {
 	depthArg string
 }
 
-// exit codes.
+// Exit codes, as 05_commands.md section 8 lists them.
+//
+// These moved in v0.3.0. v0.2.0 had 3 for no data, 4 for partial and 5 for
+// blocked, and the numbering below says what went wrong rather than how the
+// run ended, which is what a script wants when it is deciding whether to
+// retry. The change is breaking and it is documented in one place rather than
+// dribbled out one command at a time.
 //
 // 7 and 8 are separate on purpose. 7 is a decision the user can reverse by
 // passing --no-robots. 8 is the tool refusing to guess because it could not
 // read the rules at all, and no flag turns that into a proceed.
 //
-// The other five keep their v0.2.0 meanings for now. Renumbering them to match
-// the spec's table is part of M4, where the rest of the command surface moves
-// and one breaking change can be documented in one place.
+// 1 is the unclassified failure, the one nothing below recognised. It stays a
+// distinct code rather than being folded into any of the specific ones,
+// because a run that exits 4 is telling a script something true about the site
+// and a run that exits 1 is telling it we do not know.
 const (
 	exitError      = 1
-	exitUsage      = 2
-	exitNoData     = 3
-	exitPartial    = 4
-	exitBlocked    = 5
+	exitUsage      = 2 // usage, and a config file that will not load
+	exitNetwork    = 3
+	exitHTTP       = 4 // the site answered, and the answer was an error or a block
+	exitParse      = 5 // extraction failed, or a record did not reconcile
+	exitNotFound   = 6
 	exitDisallowed = 7
 	exitNoRobots   = 8
 )
@@ -160,6 +168,15 @@ func NewRootCmd() *cobra.Command {
 
 // setup resolves output defaults and constructs the shared client/cache.
 func (a *App) setup(cmd *cobra.Command) error {
+	// The file first, so everything below it works on resolved values. It only
+	// fills in what the command line left alone, so nothing here can undo a
+	// flag the user typed.
+	fc, err := loadConfigFile(configPath())
+	if err != nil {
+		return codeError(exitUsage, err)
+	}
+	a.applyConfigFile(cmd, fc)
+
 	if a.json {
 		a.format = string(FormatJSON)
 	}
@@ -224,7 +241,7 @@ func (a *App) renderOrEmpty(records any, n int) error {
 		return err
 	}
 	if n == 0 {
-		return codeError(exitNoData, nil)
+		return codeError(exitNotFound, nil)
 	}
 	return nil
 }
@@ -260,9 +277,11 @@ func mapFetchErr(err error) error {
 			"%w\nnothing was attempted. there is no fallback copy of the rules, "+
 				"because a stale copy that says yes is worse than no answer", err))
 	case isBlocked(err):
-		return codeError(exitBlocked, err)
+		return codeError(exitHTTP, err)
 	case isNotFound(err):
-		return codeError(exitNoData, err)
+		return codeError(exitNotFound, err)
+	case isNetwork(err):
+		return codeError(exitNetwork, err)
 	default:
 		return codeError(exitError, err)
 	}

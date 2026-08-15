@@ -66,7 +66,7 @@ func (a *App) bookRun(ctx context.Context, args []string) error {
 		recs = append(recs, rec)
 	}
 	if len(recs) == 0 {
-		return codeError(exitNoData, nil)
+		return codeError(exitNotFound, nil)
 	}
 
 	switch Format(a.format) {
@@ -147,7 +147,7 @@ func (a *App) bookCheck(ctx context.Context, args []string, depth goodread.Depth
 		out = append(out, r)
 	}
 	if len(out) == 0 {
-		return codeError(exitNoData, fmt.Errorf("nothing read"))
+		return codeError(exitNotFound, fmt.Errorf("nothing read"))
 	}
 
 	if a.format == string(FormatJSON) || a.format == string(FormatJSONL) {
@@ -174,7 +174,7 @@ func (a *App) bookCheck(ctx context.Context, args []string, depth goodread.Depth
 		}
 	}
 	if problems > 0 {
-		return codeError(exitPartial, fmt.Errorf("%d book(s) did not reconcile", problems))
+		return codeError(exitParse, fmt.Errorf("%d book(s) did not reconcile", problems))
 	}
 	return nil
 }
@@ -209,50 +209,54 @@ func (a *App) shelfCmd() *cobra.Command {
 	var shelfName string
 	var maxPages int
 	var useHTML bool
+	var booksOnly bool
 	cmd := &cobra.Command{
 		Use:   "shelf <user-id|url>",
 		Short: "Fetch a user's shelf",
-		Long: "shelf reads a user's bookshelf. By default it uses the open RSS feed,\n" +
-			"which returns rich rows (author, isbn, rating, dates, review text) and is\n" +
-			"not WAF-challenged. Use --html to walk the paginated HTML shelf instead.",
+		Long: "shelf reads a user's bookshelf. Both routes are disallowed by robots.txt\n" +
+			"and need --no-robots.\n\n" +
+			"By default it reads the open RSS feed, which returns one window of the\n" +
+			"shelf and carries more per row than the rendered page does: author, isbn,\n" +
+			"page count, the person's rating, their shelves, their dates and their\n" +
+			"review. --html walks the paginated HTML shelf instead, which is the only\n" +
+			"way to get the whole shelf and costs a megabyte a page.",
 		Args:    cobra.ExactArgs(1),
-		Example: "  goodread shelf 1 --shelf read\n  goodread shelf 1 --shelf read --html --max-pages 3",
+		Example: "  goodread shelf 1 --shelf read --no-robots\n  goodread shelf 1 --shelf read --html --max-pages 3 --no-robots",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, id := goodread.Classify(args[0])
 			if id == "" {
 				id = args[0]
 			}
-			var (
-				shelf *goodread.Shelf
-				rows  []goodread.ShelfBook
-				err   error
-			)
-			if useHTML {
-				shelf, rows, err = a.client.GetShelf(cmd.Context(), id, shelfName, maxPages)
-			} else {
-				shelf, rows, err = a.client.GetShelfRSS(cmd.Context(), id, shelfName)
-			}
+			a.verbosef(1, "reading %s shelf %q over %s", id, shelfName, shelfRoute(useHTML))
+			rec, err := a.client.GetShelfRecord(cmd.Context(), id, shelfName, useHTML, maxPages)
 			if err != nil {
 				return mapFetchErr(err)
 			}
+			a.reportLevels(rec.Envelope)
 			if a.store != nil {
-				_ = a.store.Put("shelf", shelf.ShelfID, shelf.URL, shelf)
+				_ = a.store.Put("shelf", rec.ID, rec.WebURL, rec)
 			}
-			rows = limitShelf(rows, a.limit)
-			return a.renderOrEmpty(rows, len(rows))
+			if a.limit > 0 && len(rec.Books) > a.limit {
+				rec.Books = rec.Books[:a.limit]
+			}
+			if booksOnly {
+				return a.renderOrEmpty(rec.Books, len(rec.Books))
+			}
+			return a.renderRecords([]*goodread.ShelfRecord{rec}, func() { printShelf(os.Stdout, rec) })
 		},
 	}
 	cmd.Flags().StringVar(&shelfName, "shelf", "read", "shelf name: read|currently-reading|to-read|<custom>")
 	cmd.Flags().IntVar(&maxPages, "max-pages", 1, "maximum pages to walk in --html mode (0 = all)")
-	cmd.Flags().BoolVar(&useHTML, "html", false, "use the paginated HTML shelf instead of the RSS feed")
+	cmd.Flags().BoolVar(&useHTML, "html", false, "walk the paginated HTML shelf instead of the RSS feed")
+	cmd.Flags().BoolVar(&booksOnly, "books", false, "list the rows instead of the shelf header")
 	return cmd
 }
 
-func limitShelf(s []goodread.ShelfBook, n int) []goodread.ShelfBook {
-	if n > 0 && len(s) > n {
-		return s[:n]
+func shelfRoute(useHTML bool) string {
+	if useHTML {
+		return "the html shelf"
 	}
-	return s
+	return "the rss feed"
 }
 
 type idRow struct {
