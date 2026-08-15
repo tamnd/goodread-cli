@@ -122,7 +122,7 @@ type queryRef struct {
 
 // --- handlers ---
 
-func getBook(ctx context.Context, in oneRef, emit func(*Book) error) error {
+func getBook(ctx context.Context, in oneRef, emit func(*ScrapedBook) error) error {
 	b, err := in.Client.GetBook(ctx, refID(in.Ref))
 	if err != nil {
 		return mapErr(err)
@@ -180,7 +180,7 @@ func listListBooks(ctx context.Context, in oneRef, emit func(ListBook) error) er
 	return nil
 }
 
-func getUser(ctx context.Context, in oneRef, emit func(*User) error) error {
+func getUser(ctx context.Context, in oneRef, emit func(*ScrapedUser) error) error {
 	u, err := in.Client.GetUser(ctx, refID(in.Ref))
 	if err != nil {
 		return mapErr(err)
@@ -217,7 +217,7 @@ func getQuotes(ctx context.Context, in oneRef, emit func(Quote) error) error {
 	return nil
 }
 
-func listReviews(ctx context.Context, in oneRef, emit func(Review) error) error {
+func listReviews(ctx context.Context, in oneRef, emit func(ScrapedReview) error) error {
 	reviews, err := in.Client.GetReviews(ctx, refID(in.Ref))
 	if err != nil {
 		return mapErr(err)

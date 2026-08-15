@@ -3,6 +3,7 @@ package goodread
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -83,6 +84,70 @@ func VerifyCaptures() ([]VerifyReport, error) {
 			}
 		}
 		sort.Strings(r.Missing)
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// SampleIDs is the pinned spread of books `verify --sample` reads live.
+//
+// Deterministic rather than random on purpose. The point of the sample is to
+// find out whether the live site still yields what the captures do, and the
+// same books every run means a difference is drift rather than a different
+// book. The spread is across the id space because a book from 2006 and a book
+// from last month do not always render the same way.
+var SampleIDs = []string{
+	"2767052",  // The Hunger Games, the page every capture is measured against
+	"1885",     // Pride and Prejudice, a classic with a negative publication time
+	"5107",     // The Catcher in the Rye, a low id from early Goodreads
+	"3",        // Harry Potter and the Prisoner of Azkaban, about the lowest live id
+	"41857151", // a recent id, rendered by a newer template generation
+	"6148028",  // Catching Fire, a series entry with a position
+	"7613",     // Nineteen Eighty-Four, heavy on editions
+	"4671",     // The Great Gatsby, heavy on shelvings
+}
+
+// VerifySample reads live book pages and reports the same shape as the
+// captures do.
+//
+// This is the check the pinned captures cannot do. A capture will keep
+// extracting cleanly forever, including on the day Goodreads changes the page,
+// which is exactly when somebody needs to hear about it.
+func VerifySample(ctx context.Context, c *Client, n int) ([]VerifyReport, error) {
+	if c == nil {
+		return nil, fmt.Errorf("no client")
+	}
+	if n <= 0 || n > len(SampleIDs) {
+		n = len(SampleIDs)
+	}
+
+	var out []VerifyReport
+	for _, id := range SampleIDs[:n] {
+		u := BookURL(id)
+		r := VerifyReport{Capture: "live " + id, Surface: "s1", URL: u}
+		body, code, err := c.Fetch(ctx, u)
+		switch {
+		case err != nil:
+			r.Err = err.Error()
+		case code == 404 || len(body) == 0:
+			r.Err = fmt.Sprintf("no body, status %d", code)
+		default:
+			e, err := ExtractBook(body)
+			if err != nil {
+				r.Err = err.Error()
+				break
+			}
+			r.Fields = len(e.Fields)
+			r.Level1 = e.Levels.Count(LevelNextData)
+			r.Level2 = e.Levels.Count(LevelMeta)
+			r.Level3 = e.Levels.Count(LevelSelector)
+			for _, want := range expectedBookFields {
+				if _, ok := e.Fields[want]; !ok {
+					r.Missing = append(r.Missing, want)
+				}
+			}
+			sort.Strings(r.Missing)
+		}
 		out = append(out, r)
 	}
 	return out, nil

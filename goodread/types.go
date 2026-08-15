@@ -8,7 +8,7 @@ package goodread
 import "time"
 
 // Book is a Goodreads book page (/book/show/<id>).
-type Book struct {
+type ScrapedBook struct {
 	BookID             string    `json:"book_id" kit:"id"`
 	WorkID             string    `json:"work_id"`
 	Title              string    `json:"title"`
@@ -112,7 +112,7 @@ type ListBook struct {
 }
 
 // Review is a Goodreads book review.
-type Review struct {
+type ScrapedReview struct {
 	ReviewID   string    `json:"review_id" kit:"id"`
 	BookID     string    `json:"book_id" kit:"link,kind=goodreads/book"`
 	UserID     string    `json:"user_id" kit:"link,kind=goodreads/user,optional"`
@@ -142,7 +142,7 @@ type Quote struct {
 }
 
 // User is a public Goodreads reader profile (/user/show/<id>).
-type User struct {
+type ScrapedUser struct {
 	UserID         string    `json:"user_id" kit:"id"`
 	Name           string    `json:"name"`
 	Username       string    `json:"username"`
