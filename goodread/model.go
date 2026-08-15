@@ -29,6 +29,26 @@ type Envelope struct {
 	Via         map[string]string `json:"via,omitempty"`
 	Level       map[string]int    `json:"level,omitempty"`
 	Missed      []string          `json:"missed,omitempty"`
+
+	// Robots is present only when the record was built from a page the site
+	// asked us not to read, which is to say only under --no-robots. A record
+	// with no robots block came off allowed surfaces, so the absence carries
+	// as much meaning as the presence does.
+	Robots *RobotsNote `json:"robots,omitempty"`
+}
+
+// RobotsNote is the robots.txt verdict on a page that was read anyway.
+//
+// Allowed is never omitted, so a consumer reading `robots.allowed` gets a
+// false rather than a missing key, and Rule quotes the line from the file that
+// decided it rather than paraphrasing. Anything downstream of a record can
+// therefore tell that this data came from a page the site declined to offer,
+// without knowing which flags the run was started with.
+type RobotsNote struct {
+	Allowed bool   `json:"allowed"`
+	Path    string `json:"path"`
+	Rule    string `json:"rule"`
+	Source  string `json:"source,omitempty"`
 }
 
 // Book is one edition.
@@ -221,6 +241,13 @@ type Review struct {
 	// surfaces that read them.
 	Extra map[string]json.RawMessage `json:"extra,omitempty"`
 	Via   string                     `json:"via"`
+
+	// Robots is set on a review that came off /book/reviews, which robots.txt
+	// disallows. A review is a row rather than a record and carries no
+	// envelope, and `reviews --all` returns the book page's sample and the
+	// walked pages in one list, so the note has to sit on the row or the two
+	// sets become indistinguishable once they are merged.
+	Robots *RobotsNote `json:"robots,omitempty"`
 }
 
 // Shelving is one person putting one book on one shelf.

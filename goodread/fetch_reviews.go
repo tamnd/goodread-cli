@@ -51,7 +51,10 @@ func (c *Client) GetReviewPages(ctx context.Context, bookID string, maxPages int
 	seen := map[string]bool{}
 	var out []Review
 	for page := 1; page <= maxPages; page++ {
-		u := op.URL(bookID, strconv.Itoa(page))
+		// c.base rather than op.URL, which hardcodes the live site. The
+		// difference only shows up under a test server, and it showed up as a
+		// test quietly fetching goodreads.com for real.
+		u := c.base + op.Path(bookID, strconv.Itoa(page))
 		body, code, err := c.FetchAccept(ctx, u, AcceptAny)
 		if err != nil {
 			return out, err
@@ -73,6 +76,10 @@ func (c *Client) GetReviewPages(ctx context.Context, bookID string, maxPages int
 			}
 			seen[r.ID] = true
 			fresh++
+			if n, ok := c.Overridden(u); ok {
+				note := n
+				r.Robots = &note
+			}
 			out = append(out, r)
 		}
 		// Goodreads repeats the featured review at the top of each page, so a

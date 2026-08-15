@@ -18,7 +18,7 @@ import (
 
 // GetAuthorRecord fetches an author page and reads it into the v0.3.0 model.
 func (c *Client) GetAuthorRecord(ctx context.Context, id string) (*Author, error) {
-	u := AuthorURL(id)
+	u := c.site(AuthorURL(id))
 	body, err := c.fetchPage(ctx, u)
 	if err != nil {
 		return nil, err
@@ -27,12 +27,17 @@ func (c *Client) GetAuthorRecord(ctx context.Context, id string) (*Author, error
 	if err != nil {
 		return nil, err
 	}
-	return AuthorFrom(e, numericPrefix(id), time.Now().UTC())
+	rec, err := AuthorFrom(e, numericPrefix(id), time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	c.stamp(&rec.Envelope, u)
+	return rec, nil
 }
 
 // GetSeriesRecord fetches a series page and reads it into the v0.3.0 model.
 func (c *Client) GetSeriesRecord(ctx context.Context, id string) (*Series, error) {
-	u := SeriesURL(id)
+	u := c.site(SeriesURL(id))
 	body, err := c.fetchPage(ctx, u)
 	if err != nil {
 		return nil, err
@@ -41,7 +46,12 @@ func (c *Client) GetSeriesRecord(ctx context.Context, id string) (*Series, error
 	if err != nil {
 		return nil, err
 	}
-	return SeriesFrom(e, numericPrefix(id), time.Now().UTC())
+	rec, err := SeriesFrom(e, numericPrefix(id), time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	c.stamp(&rec.Envelope, u)
+	return rec, nil
 }
 
 // GetListRecord fetches a Listopia page and reads it into the v0.3.0 model.
@@ -49,7 +59,7 @@ func (c *Client) GetSeriesRecord(ctx context.Context, id string) (*Series, error
 // The id keeps its slug, because /list/show/1 redirects and /list/show/1.Best_
 // Books_Ever answers.
 func (c *Client) GetListRecord(ctx context.Context, id string, page int) (*List, error) {
-	u := ListURL(id)
+	u := c.site(ListURL(id))
 	if page > 1 {
 		u += "?page=" + itoa(page)
 	}
@@ -61,12 +71,17 @@ func (c *Client) GetListRecord(ctx context.Context, id string, page int) (*List,
 	if err != nil {
 		return nil, err
 	}
-	return ListFrom(e, id, time.Now().UTC())
+	rec, err := ListFrom(e, id, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	c.stamp(&rec.Envelope, u)
+	return rec, nil
 }
 
 // GetGenreRecord fetches a genre page and reads it into the v0.3.0 model.
 func (c *Client) GetGenreRecord(ctx context.Context, slug string) (*Genre, error) {
-	u := GenreURL(slug)
+	u := c.site(GenreURL(slug))
 	body, err := c.fetchPage(ctx, u)
 	if err != nil {
 		return nil, err
@@ -75,7 +90,12 @@ func (c *Client) GetGenreRecord(ctx context.Context, slug string) (*Genre, error
 	if err != nil {
 		return nil, err
 	}
-	return GenreFrom(e, slug, time.Now().UTC())
+	rec, err := GenreFrom(e, slug, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	c.stamp(&rec.Envelope, u)
+	return rec, nil
 }
 
 // GetEditionsRecord fetches one page of a work's editions.
@@ -84,7 +104,7 @@ func (c *Client) GetGenreRecord(ctx context.Context, slug string) (*Genre, error
 // 404 out of this surface, and the error says so rather than leaving the caller
 // to work out that their id was the right shape and the wrong kind.
 func (c *Client) GetEditionsRecord(ctx context.Context, workID string, page int) (*Editions, error) {
-	u := EditionsURL(workID, page)
+	u := c.site(EditionsURL(workID, page))
 	body, err := c.fetchPage(ctx, u)
 	if err != nil {
 		return nil, err
@@ -93,7 +113,12 @@ func (c *Client) GetEditionsRecord(ctx context.Context, workID string, page int)
 	if err != nil {
 		return nil, err
 	}
-	return EditionsFrom(e, numericPrefix(workID), time.Now().UTC())
+	rec, err := EditionsFrom(e, numericPrefix(workID), time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	c.stamp(&rec.Envelope, u)
+	return rec, nil
 }
 
 // GetQuotesRecord fetches one page of a work's or an author's quotes.
@@ -101,9 +126,9 @@ func (c *Client) GetEditionsRecord(ctx context.Context, workID string, page int)
 // The two are one method because they are one page. The subject kind decides
 // the URL and nothing else, and the record carries which one it was.
 func (c *Client) GetQuotesRecord(ctx context.Context, id string, byAuthor bool, page int) (*Quotes, error) {
-	u := WorkQuotesURL(id, page)
+	u := c.site(WorkQuotesURL(id, page))
 	if byAuthor {
-		u = AuthorQuotesURL(id, page)
+		u = c.site(AuthorQuotesURL(id, page))
 	}
 	body, err := c.fetchPage(ctx, u)
 	if err != nil {
@@ -113,7 +138,12 @@ func (c *Client) GetQuotesRecord(ctx context.Context, id string, byAuthor bool, 
 	if err != nil {
 		return nil, err
 	}
-	return QuotesFrom(e, numericPrefix(id), time.Now().UTC())
+	rec, err := QuotesFrom(e, numericPrefix(id), time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	c.stamp(&rec.Envelope, u)
+	return rec, nil
 }
 
 // fetchPage is the fetch and the two refusals every one of these shares.
@@ -159,6 +189,11 @@ func (c *Client) GetShelfRecord(ctx context.Context, userID, shelfName string, u
 		return nil, err
 	}
 	rec := ShelfFrom(shelf, rows, source, time.Now().UTC())
+	u := c.site(ShelfRSSURL(userID, shelfName))
+	if useHTML {
+		u = c.site(ShelfURL(userID, shelfName, 1))
+	}
+	c.stamp(&rec.Envelope, u)
 	if err != nil {
 		rec.Missed = append(rec.Missed, "the read stopped early: "+err.Error())
 	}

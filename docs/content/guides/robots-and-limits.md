@@ -70,7 +70,7 @@ goodread shelf 1 --shelf read --no-robots
 goodread reviews 2767052 --all --no-robots --yes
 ```
 
-Four things about it are deliberate.
+Five things about it are deliberate.
 
 It warns once, on stderr, so a script that uses it is not silently using it.
 
@@ -79,6 +79,18 @@ The override is about which paths, not about how fast, and one second between re
 
 It is absent from the config file and from the environment.
 It has to be typed, every time, by the person running the command, so it cannot be turned on for you by a file you did not write.
+
+What it reads says where it came from.
+A record built from a disallowed page carries a `robots` block with `allowed: false` and the rule from the file that matched it, so the data stays marked long after the shell history is gone.
+
+```json
+"robots": {
+  "allowed": false,
+  "path": "/book/reviews/2767052",
+  "rule": "Disallow: /book/reviews/",
+  "source": "https://www.goodreads.com/robots.txt"
+}
+```
 
 A crawl with it needs `--yes` as well.
 On one page the flag is one decision about one request.
