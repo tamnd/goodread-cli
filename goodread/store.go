@@ -65,6 +65,9 @@ CREATE INDEX IF NOT EXISTS idx_queue_status ON queue(status, priority DESC, id);
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
 	}
+	if _, err := s.db.Exec(frontierSchema); err != nil {
+		return err
+	}
 	return s.migrateGraph()
 }
 

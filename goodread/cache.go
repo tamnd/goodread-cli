@@ -148,3 +148,16 @@ func (c *Client) CachingFetchHTML(ctx context.Context, cache *Cache, cfg Config,
 	}
 	return goquery.NewDocumentFromReader(bytes.NewReader(body))
 }
+
+// Fresh says whether a URL is in the cache and inside the TTL.
+//
+// Without reading the body, because the one caller is the crawler counting how
+// many of its pages cost a request and how many did not, and decompressing a
+// megabyte of HTML to answer that would make the counting the expensive part.
+func (c *Cache) Fresh(url string) bool {
+	info, err := os.Stat(c.pathFor(url))
+	if err != nil {
+		return false
+	}
+	return c.ttl <= 0 || time.Since(info.ModTime()) <= c.ttl
+}
