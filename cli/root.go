@@ -150,6 +150,8 @@ func NewRootCmd() *cobra.Command {
 		app.lookupCmd(),
 		app.findCmd(),
 		app.queryCmd(),
+		app.graphCmd(),
+		app.exportCmd(),
 		app.reviewsCmd(),
 		app.similarCmd(),
 		app.idCmd(),

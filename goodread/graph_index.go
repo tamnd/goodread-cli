@@ -112,7 +112,7 @@ func (s *Store) IndexRecord(kind, id, url string, data []byte) error {
 				first = err
 			}
 			if bookURI != "" && workURI != "" {
-				_ = s.PutEdge(bookURI, "edition_of", workURI, nil, surfaceOf(inner), retrievedAt(inner))
+				_ = s.PutEdge(bookURI, EdgeEditionOf, workURI, nil, surfaceOf(inner), retrievedAt(inner))
 			}
 		}
 		return first
@@ -173,11 +173,17 @@ func (s *Store) indexOne(kind, fallbackID, url string, m map[string]any) (string
 }
 
 // indexRefs writes the edges a record carries about itself.
+//
+// Directions are the spec's, not the ones that read most naturally in a
+// sentence. `contributed_by` runs book to author even though "the author wrote
+// the book" is how anybody would say it, because one canonical direction is
+// what stops the same fact being written twice under two names, and Edges
+// answers either way regardless.
 func (s *Store) indexRefs(uri string, m map[string]any) {
 	surface, at := surfaceOf(m), retrievedAt(m)
+	isBook := strings.HasPrefix(uri, "gr:book/")
+	isWork := strings.HasPrefix(uri, "gr:work/")
 
-	// The author owns the edge, not the book, because "what did they write" is
-	// the question people ask and the role belongs to the edge either way.
 	for _, c := range keyMaps(m, "contributors") {
 		au := uriOf("author", "", c)
 		if au == "" {
@@ -187,8 +193,8 @@ func (s *Store) indexRefs(uri string, m map[string]any) {
 		if role := keyStr(c, "role"); role != "" {
 			props = map[string]string{"role": role}
 		}
-		_ = s.PutEdge(au, "wrote", uri, props, surface, at)
-		_ = s.PutNode(Node{URI: au, Kind: "author", ID: keyStr(c, "id"),
+		_ = s.PutEdge(uri, EdgeContributed, au, props, surface, at)
+		_ = s.PutNode(Node{URI: au, Kind: "author", ID: kcaOf(c),
 			LegacyID: int64(keyNum(c, "legacy_id")), Title: keyStr(c, "name"),
 			JSON:     mustJSON(map[string]any{"legacy_id": keyNum(c, "legacy_id"), "name": keyStr(c, "name")}),
 			Surfaces: []string{surface}, RetrievedAt: at})
@@ -200,27 +206,102 @@ func (s *Store) indexRefs(uri string, m map[string]any) {
 		if su == "" {
 			continue
 		}
-		var props any
+		// Both forms of the position. The raw string is the only one that can
+		// hold 1-3 on an omnibus, and the parsed number is the only one that
+		// sorts, so an edge that kept one of them would lose either the
+		// omnibuses or the ordering.
+		props := map[string]any{}
 		if pos := keyStr(e, "position"); pos != "" {
-			props = map[string]string{"position": pos}
+			props["position"] = pos
 		}
-		_ = s.PutEdge(uri, "in_series", su, props, surface, at)
+		if n, ok := e["number"].(float64); ok {
+			props["number"] = n
+		}
+		_ = s.PutEdge(uri, EdgeInSeries, su, propsOrNil(props), surface, at)
+		if name := keyStr(ref, "title"); name != "" {
+			_ = s.PutNode(Node{URI: su, Kind: "series", Title: name,
+				LegacyID: int64(keyNum(ref, "legacy_id")),
+				JSON:     mustJSON(map[string]any{"kind": "series", "title": name}),
+				Surfaces: []string{surface}, RetrievedAt: at})
+		}
 	}
 
 	for _, g := range keyMaps(m, "genres") {
-		name := keyStr(g, "name")
+		if keyStr(g, "name") == "" {
+			continue
+		}
+		_ = s.PutEdge(uri, EdgeShelvedAs, NodeURI("genre", genreURISlug(g)), nil, surface, at)
+	}
+
+	if w, ok := m["work"].(map[string]any); ok && isBook {
+		if wu := uriOf("work", "", w); wu != "" {
+			_ = s.PutEdge(uri, EdgeEditionOf, wu, nil, surface, at)
+		}
+	}
+
+	if isWork {
+		if b, ok := m["best_book"].(map[string]any); ok {
+			if bu := uriOf("book", "", b); bu != "" {
+				_ = s.PutEdge(uri, EdgeBestEdition, bu, nil, surface, at)
+			}
+		}
+		// Places, characters and awards have no id of their own on Goodreads.
+		// They are curated strings hanging off a work, so the slug is the id,
+		// and two places with the same name in different countries collide.
+		// That limit is in 04_graph.md rather than papered over with a
+		// synthetic id nothing else in the world shares.
+		s.indexNamed(uri, EdgeSetIn, "place", keyMaps(m, "places"), surface, at)
+		s.indexNamed(uri, EdgeFeatures, "character", keyMaps(m, "characters"), surface, at)
+		for _, a := range keyMaps(m, "awards_won") {
+			name := keyStr(a, "name")
+			if name == "" {
+				continue
+			}
+			props := map[string]any{}
+			if c := keyStr(a, "category"); c != "" {
+				props["category"] = c
+			}
+			if y := keyNum(a, "year"); y > 0 {
+				props["year"] = int64(y)
+			}
+			au := NodeURI("award", slug(name))
+			_ = s.PutEdge(uri, EdgeWon, au, propsOrNil(props), surface, at)
+			_ = s.PutNode(Node{URI: au, Kind: "award", Title: name,
+				JSON:     mustJSON(map[string]any{"kind": "award", "name": name}),
+				Surfaces: []string{surface}, RetrievedAt: at})
+		}
+	}
+
+	// A quotes record points at whatever it was quoted from. The work quotes
+	// page names a work and the author quotes page names an author, and only
+	// the first of those is an edge the spec has.
+	if subj, ok := m["subject"].(map[string]any); ok && strings.HasPrefix(uri, "gr:quotes/") {
+		if wu := uriOf("work", "", subj); wu != "" && keyStr(subj, "type") == "Work" {
+			_ = s.PutEdge(uri, EdgeQuotedFrom, wu, nil, surface, at)
+		}
+	}
+}
+
+// indexNamed writes the edges to nodes whose id is their own name.
+func (s *Store) indexNamed(src, predicate, kind string, items []map[string]any, surface string, at time.Time) {
+	for _, it := range items {
+		name := keyStr(it, "name")
 		if name == "" {
 			continue
 		}
-		gu := NodeURI("genre", genreURISlug(g))
-		_ = s.PutEdge(uri, "in_genre", gu, nil, surface, at)
+		uri := NodeURI(kind, slug(name))
+		_ = s.PutEdge(src, predicate, uri, nil, surface, at)
+		_ = s.PutNode(Node{URI: uri, Kind: kind, Title: name,
+			JSON:     mustJSON(map[string]any{"kind": kind, "name": name}),
+			Surfaces: []string{surface}, RetrievedAt: at})
 	}
+}
 
-	if w, ok := m["work"].(map[string]any); ok {
-		if wu := uriOf("work", "", w); wu != "" && strings.HasPrefix(uri, "gr:book/") {
-			_ = s.PutEdge(uri, "edition_of", wu, nil, surface, at)
-		}
+func propsOrNil(m map[string]any) any {
+	if len(m) == 0 {
+		return nil
 	}
+	return m
 }
 
 // indexCards indexes the book rows a listing record carries.
@@ -261,12 +342,23 @@ func (s *Store) indexCards(uri string, m map[string]any) {
 				Description: keyStr(c, "description"),
 				AuthorName:  cardAuthor(c),
 			})
-			if uri != "" {
-				_ = s.PutEdge(uri, "contains", bu, map[string]int{"position": i + 1}, surface, at)
+			// The edge runs from the row to the container, which is the
+			// direction the spec fixes, and which container it is decides the
+			// predicate: a list holds books and a work has editions, and those
+			// are two different facts even though the row looks the same.
+			switch {
+			case strings.HasPrefix(uri, "gr:list/"):
+				_ = s.PutEdge(bu, EdgeListedIn, uri, map[string]int{"position": i + 1}, surface, at)
+			case strings.HasPrefix(uri, "gr:work/"):
+				_ = s.PutEdge(bu, EdgeEditionOf, uri, nil, surface, at)
 			}
 			for _, con := range keyMaps(c, "contributors") {
 				if au := uriOf("author", "", con); au != "" {
-					_ = s.PutEdge(au, "wrote", bu, nil, surface, at)
+					var props any
+					if role := keyStr(con, "role"); role != "" {
+						props = map[string]string{"role": role}
+					}
+					_ = s.PutEdge(bu, EdgeContributed, au, props, surface, at)
 				}
 			}
 		}
