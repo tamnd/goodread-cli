@@ -75,6 +75,7 @@ func BookFrom(e *Extractor, retrievedAt time.Time) (*Book, error) {
 	b.Contributors = contributorsFromFields(e)
 	b.Series = seriesFromFields(e)
 	b.Stats = statsFrom(e)
+	b.Reviews, b.Shelvings = reviewsFromFields(e)
 
 	return b, nil
 }
@@ -258,7 +259,7 @@ func seriesFromFields(e *Extractor) []SeriesEntry {
 	out := make([]SeriesEntry, 0, len(raw))
 	for _, r := range raw {
 		entry := SeriesEntry{
-			Series:   Ref{Type: "Series", ID: r.ID, Key: "Series:" + r.ID, Resolved: r.Name != ""},
+			Series:   Ref{Type: "Series", ID: r.ID, Key: "Series:" + r.ID, Title: r.Name, Resolved: r.Name != ""},
 			Position: r.Number,
 		}
 		if n, ok := parsePosition(r.Number); ok {

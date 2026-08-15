@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -16,52 +17,78 @@ import (
 func (a *App) bookCmd() *cobra.Command {
 	var withReviews bool
 	var check bool
-	var depth string
 	cmd := &cobra.Command{
 		Use:     "book <id|url> [id|url ...]",
 		Short:   "Fetch one or more books",
 		Args:    cobra.MinimumNArgs(1),
-		Example: "  goodread book 2767052\n  goodread book https://www.goodreads.com/book/show/2767052 --format json\n  goodread book 2767052 --check",
+		Example: "  goodread book 2767052\n  goodread book https://www.goodreads.com/book/show/2767052 --json\n  goodread book 2767052 --check",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			if check {
-				d, ok := goodread.ParseDepth(depth)
-				if !ok {
-					return codeError(exitUsage, fmt.Errorf("unknown depth %q, want one of %s", depth, depthList()))
-				}
-				return a.bookCheck(ctx, args, d)
+				return a.bookCheck(ctx, args, a.depth)
 			}
-			var books []*goodread.ScrapedBook
-			for _, arg := range args {
-				_, id := goodread.Classify(arg)
-				if id == "" {
-					id = arg
-				}
-				b, err := a.client.GetBook(ctx, id)
-				if err != nil {
-					if len(args) == 1 {
-						return mapFetchErr(err)
-					}
-					a.progressf("book %s: %v", arg, err)
-					continue
-				}
-				if a.store != nil {
-					_ = a.store.Put("book", b.BookID, b.URL, b)
-				}
-				books = append(books, b)
-			}
-			if withReviews {
-				// reviews embedded on the page are surfaced via the reviews command;
-				// here we just keep the book records.
-				_ = withReviews
-			}
-			return a.renderOrEmpty(books, len(books))
+			return a.bookRun(ctx, args)
 		},
 	}
 	cmd.Flags().BoolVar(&withReviews, "with-reviews", false, "also fetch embedded reviews (use the reviews command for detail)")
 	cmd.Flags().BoolVar(&check, "check", false, "read the book into the v0.3.0 model and reconcile its numbers")
-	cmd.Flags().StringVar(&depth, "depth", "meta", "how much to read: "+depthList())
+	_ = withReviews
 	return cmd
+}
+
+// bookRun reads books into the v0.3.0 model.
+//
+// This is the command that moved off parse.go. The record it prints carries the
+// ratings histogram, the provenance of every field and the not read block, none
+// of which the selector path could produce.
+func (a *App) bookRun(ctx context.Context, args []string) error {
+	var recs []*goodread.BookRecord
+	for _, arg := range args {
+		ref, err := goodread.ParseRefAs(arg, "book")
+		if err != nil {
+			return codeError(exitUsage, err)
+		}
+		a.verbosef(1, "reading %s at depth %s, %d request(s)", ref, a.depth, a.depth.Requests())
+		rec, err := a.client.GetBookRecord(ctx, ref.ID, a.depth)
+		if err != nil {
+			if len(args) == 1 {
+				return mapFetchErr(err)
+			}
+			a.progressf("book %s: %v", arg, err)
+			continue
+		}
+		for f, via := range rec.Book.Via {
+			a.verbosef(2, "  %s via %s level %d", f, via, rec.Book.Level[f])
+		}
+		if a.store != nil {
+			_ = a.store.Put("book", strconv.FormatInt(rec.Book.LegacyID, 10), rec.Book.WebURL, rec)
+		}
+		recs = append(recs, rec)
+	}
+	if len(recs) == 0 {
+		return codeError(exitNoData, nil)
+	}
+
+	switch Format(a.format) {
+	case FormatTable:
+		for i, rec := range recs {
+			if i > 0 {
+				fmt.Fprintln(os.Stdout)
+			}
+			printBook(os.Stdout, rec.Book, rec.Work)
+		}
+		return nil
+	case FormatJSON, FormatJSONL:
+		return a.render(recs)
+	default:
+		// csv, tsv, url, raw and --template all want one flat row per book, so
+		// they get the book and not the record around it.
+		books := make([]*goodread.Book, 0, len(recs))
+		for _, rec := range recs {
+			books = append(books, rec.Book)
+		}
+		return a.render(books)
+	}
 }
 
 func depthList() string {
@@ -417,14 +444,16 @@ type idRow struct {
 // search ────────────────────────────────────────────────────────────────────
 
 func (a *App) searchCmd() *cobra.Command {
-	var htmlOnly bool
+	var deep bool
 	var booksMode bool
 	cmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search books and authors",
-		Long: "search returns books and authors matching a query. By default it uses\n" +
-			"the open autocomplete endpoint (concise results: type, title, url).\n" +
-			"Use --books for rich book records (rating, pages, author, description).",
+		Long: "search returns books and authors matching a query. By default it reads\n" +
+			"/book/auto_complete, which robots.txt allows, needs no key and carries the\n" +
+			"book id, work id, title, author, page count, rating and ratings count.\n\n" +
+			"--books returns those as full book records. --deep reads /search as well,\n" +
+			"which robots.txt disallows, so it needs --no-robots.",
 		Args:    cobra.MinimumNArgs(1),
 		Example: "  goodread search \"the hunger games\" -n 10\n  goodread search dune --books --format json",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -445,7 +474,7 @@ func (a *App) searchCmd() *cobra.Command {
 				res []goodread.SearchResult
 				err error
 			)
-			if htmlOnly {
+			if deep {
 				res, err = a.client.SearchHTML(cmd.Context(), q, a.limit)
 			} else {
 				res, err = a.client.Search(cmd.Context(), q, a.limit)
@@ -457,37 +486,100 @@ func (a *App) searchCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&booksMode, "books", false, "return rich book records from autocomplete")
-	cmd.Flags().BoolVar(&htmlOnly, "html", false, "skip autocomplete and use full HTML search (paginates)")
+	cmd.Flags().BoolVar(&deep, "deep", false, "read /search as well, which needs --no-robots")
+	// --html is what v0.2.0 called it. Kept working and kept out of the help,
+	// because renaming a flag and deleting it in the same release is two
+	// breaking changes where one will do.
+	cmd.Flags().BoolVar(&deep, "html", false, "deprecated alias for --deep")
+	_ = cmd.Flags().MarkHidden("html")
 	return cmd
 }
 
 // reviews ───────────────────────────────────────────────────────────────────
 
 func (a *App) reviewsCmd() *cobra.Command {
-	return &cobra.Command{
+	var all bool
+	var yes bool
+	var maxPages int
+	cmd := &cobra.Command{
 		Use:   "reviews <book-id|url>",
-		Short: "Fetch reviews embedded on a book page",
-		Args:  cobra.ExactArgs(1),
+		Short: "Read a book's reviews",
+		Long: "reviews reads the sample of reviews the book page already carries, which\n" +
+			"is one allowed request and needs no flag.\n\n" +
+			"--all walks /book/reviews, which robots.txt disallows, so it needs\n" +
+			"--no-robots as well. It prints what that costs and needs --yes before it\n" +
+			"starts. Worth knowing: Goodreads paginates that page to ten pages of\n" +
+			"thirty, so --all reaches about 300 reviews and not the whole set.",
+		Args:    cobra.ExactArgs(1),
+		Example: "  goodread reviews 2767052\n  goodread reviews 2767052 --all --no-robots --yes",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, id := goodread.Classify(args[0])
-			if id == "" {
-				id = args[0]
+			ctx := cmd.Context()
+			ref, err := goodread.ParseRefAs(args[0], "book")
+			if err != nil {
+				return codeError(exitUsage, err)
 			}
-			reviews, err := a.client.GetReviews(cmd.Context(), id)
+
+			a.verbosef(1, "reading the book page for the review sample")
+			rec, err := a.client.GetBookRecord(ctx, ref.ID, goodread.DepthQuick)
 			if err != nil {
 				return mapFetchErr(err)
 			}
-			if a.store != nil {
-				for _, rv := range reviews {
-					_ = a.store.Put("review", rv.ReviewID, rv.URL, rv)
+			reviews := rec.Book.Reviews
+
+			if all {
+				var total int64
+				if rec.Book.Stats != nil && rec.Book.Stats.TextReviewsCount != nil {
+					total = *rec.Book.Stats.TextReviewsCount
 				}
+				cost := goodread.EstimateReviews(total, a.cfg.Delay)
+				fmt.Fprintln(os.Stderr, cost)
+				if !yes {
+					return codeError(exitUsage, fmt.Errorf(
+						"pass --yes to spend those %d requests", cost.Requests))
+				}
+				more, err := a.client.GetReviewPages(ctx, ref.ID, maxPages)
+				if err != nil {
+					// Whatever was read before the error is still worth having,
+					// and saying how far it got beats returning nothing.
+					if len(more) == 0 {
+						return mapFetchErr(err)
+					}
+					a.progressf("stopped after %d reviews: %v", len(more), err)
+				}
+				reviews = mergeReviews(reviews, more)
 			}
+
 			if a.limit > 0 && len(reviews) > a.limit {
 				reviews = reviews[:a.limit]
+			}
+			if a.store != nil {
+				for _, rv := range reviews {
+					_ = a.store.Put("review", rv.ID, "", rv)
+				}
+			}
+			for _, m := range rec.Book.Missed {
+				a.verbosef(1, "not read: %s", m)
 			}
 			return a.renderOrEmpty(reviews, len(reviews))
 		},
 	}
+	cmd.Flags().BoolVar(&all, "all", false, "walk /book/reviews as well, which needs --no-robots and --yes")
+	cmd.Flags().BoolVar(&yes, "yes", false, "go ahead with the requests --all costs")
+	cmd.Flags().IntVar(&maxPages, "max-pages", goodread.MaxReviewPages, "pages of /book/reviews to walk with --all")
+	return cmd
+}
+
+// mergeReviews keeps both sets without pretending they are one.
+//
+// The cache ids are kca uris and the page ids are legacy integers, so nothing
+// links a review from one to the same review in the other. Dropping either set
+// would lose reviews, so both are kept and the duplication is stated here
+// rather than hidden behind a merge that cannot work.
+func mergeReviews(cached, paged []goodread.Review) []goodread.Review {
+	out := make([]goodread.Review, 0, len(cached)+len(paged))
+	out = append(out, cached...)
+	out = append(out, paged...)
+	return out
 }
 
 // similar ───────────────────────────────────────────────────────────────────

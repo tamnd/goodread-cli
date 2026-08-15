@@ -108,7 +108,7 @@ func NewClient(cfg Config) *Client {
 		if err := c.limiter.Wait(ctx); err != nil {
 			return nil, 0, err
 		}
-		return c.doGet(ctx, c.base+"/robots.txt")
+		return c.doGet(ctx, c.base+"/robots.txt", defaultAccept)
 	})
 	return c
 }
@@ -236,6 +236,17 @@ func (c *Client) warn(path string, rule Rule) {
 // Fetch returns the raw body and status for a URL, retrying transient failures.
 // A 404 returns (nil, 404, nil). A sign-in redirect returns ErrBlocked.
 func (c *Client) Fetch(ctx context.Context, rawurl string) ([]byte, int, error) {
+	return c.FetchAccept(ctx, rawurl, defaultAccept)
+}
+
+// FetchAccept is Fetch with the Accept header spelled out.
+//
+// /book/reviews needs it. That endpoint is an ajax partial with no HTML
+// representation, so a request that says it wants HTML gets a 406 with an empty
+// body. Asking for */* gets the partial. This is content negotiation working as
+// designed and not a block, which is why the answer is the right Accept header
+// and not a browser user agent.
+func (c *Client) FetchAccept(ctx context.Context, rawurl, accept string) ([]byte, int, error) {
 	if err := c.check(ctx, rawurl); err != nil {
 		return nil, 0, err
 	}
@@ -247,7 +258,7 @@ func (c *Client) Fetch(ctx context.Context, rawurl string) ([]byte, int, error) 
 		if err := c.limiter.Wait(ctx); err != nil {
 			return nil, 0, err
 		}
-		body, code, err := c.doGet(ctx, rawurl)
+		body, code, err := c.doGet(ctx, rawurl, accept)
 		if err != nil {
 			if errors.Is(err, ErrBlocked) || attempt == max {
 				return nil, code, err
@@ -276,6 +287,12 @@ func (c *Client) Fetch(ctx context.Context, rawurl string) ([]byte, int, error) 
 	return nil, 0, fmt.Errorf("all %d attempts failed", max)
 }
 
+// defaultAccept is what every read asks for unless it says otherwise.
+const defaultAccept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
+// AcceptAny is for endpoints that have no HTML representation.
+const AcceptAny = "*/*"
+
 // FetchHTML fetches a URL and parses it into a goquery document.
 func (c *Client) FetchHTML(ctx context.Context, rawurl string) (*goquery.Document, int, error) {
 	body, code, err := c.Fetch(ctx, rawurl)
@@ -295,13 +312,16 @@ func (c *Client) FetchHTML(ctx context.Context, rawurl string) (*goquery.Documen
 	return doc, code, nil
 }
 
-func (c *Client) doGet(ctx context.Context, rawurl string) ([]byte, int, error) {
+func (c *Client) doGet(ctx context.Context, rawurl, accept string) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
 	if err != nil {
 		return nil, 0, err
 	}
 	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	if accept == "" {
+		accept = defaultAccept
+	}
+	req.Header.Set("Accept", accept)
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	// Leave Accept-Encoding to the transport for transparent gzip.
 
@@ -335,7 +355,7 @@ func (c *Client) doGet(ctx context.Context, rawurl string) ([]byte, int, error) 
 				return nil, 401, fmt.Errorf("%w (%s)", ErrBlocked, rawurl)
 			}
 			time.Sleep(300 * time.Millisecond)
-			return c.doGet(ctx, to)
+			return c.doGet(ctx, to, accept)
 		}
 	}
 	return body, resp.StatusCode, nil

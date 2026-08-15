@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -89,6 +90,55 @@ func (s *Store) Get(entityType, id string) ([]byte, error) {
 		return nil, err
 	}
 	return []byte(data), nil
+}
+
+// Hit is one result from a store search.
+type Hit struct {
+	Kind  string `json:"kind"`
+	ID    string `json:"id"`
+	Title string `json:"title,omitempty"`
+	URL   string `json:"url,omitempty"`
+}
+
+// Search matches text against the stored records.
+//
+// A LIKE over the stored JSON, which is honest about what it is: a substring
+// match, case insensitive, no ranking and no stemming. The FTS5 index over
+// title, description and author name is the store milestone's work, and
+// pretending this is that would set the wrong expectation about what it finds.
+func (s *Store) Search(entityType, query string, limit int) ([]Hit, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	q := "%" + strings.ToLower(query) + "%"
+
+	sql := `SELECT entity_type, id, url,
+	          COALESCE(json_extract(data,'$.title'), json_extract(data,'$.name'), '')
+	        FROM records
+	        WHERE lower(data) LIKE ?`
+	args := []any{q}
+	if entityType != "" {
+		sql += ` AND entity_type=?`
+		args = append(args, entityType)
+	}
+	sql += ` ORDER BY entity_type, id LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.db.Query(sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []Hit
+	for rows.Next() {
+		var h Hit
+		if err := rows.Scan(&h.Kind, &h.ID, &h.URL, &h.Title); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
 }
 
 // Count returns the number of stored records of a type ("" for all types).

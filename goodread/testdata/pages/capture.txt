@@ -17,3 +17,4 @@ work_editions_2792775.html.gz	s6	2026-08-15	https://www.goodreads.com/work/editi
 work_quotes_2792775.html.gz	s7	2026-08-15	https://www.goodreads.com/work/quotes/2792775	the second exception path
 list_show_1.html.gz	s4	2026-08-15	https://www.goodreads.com/list/show/1	Listopia, ranked books
 genres_fantasy.html.gz	s5	2026-08-15	https://www.goodreads.com/genres/fantasy	genre page, featured books and related genres
+book_reviews_2767052.js.gz	s12	2026-08-16	https://www.goodreads.com/book/reviews/2767052	the paginated review set, and the one surface that answers with JavaScript rather than HTML
