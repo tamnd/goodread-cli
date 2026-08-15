@@ -1,105 +1,192 @@
 ---
-title: "CLI"
-description: "Every command and subcommand, with the flags that matter and one example each."
+title: "CLI reference"
+description: "Every goodread command and every flag, grouped by what it is for."
 weight: 10
 ---
 
 ```
-goodread <command> [args] [flags]
+goodread [command] [--flags]
 ```
 
-Run `goodread <command> --help` for the full flag list on any command. This page
-is the map. Commands that read the `/book/show/` page (`book`, `similar`,
-`reviews`) are the ones the AWS WAF can challenge; the rest lean on open
-endpoints. See [troubleshooting](/reference/troubleshooting/).
+Every command accepts the [global flags](/reference/configuration/#global-flags).
+The tables below list only the flags each command adds.
 
-## Commands
+## Reading Goodreads
 
-| Command | What it does |
+### book
+
+```
+goodread book <id|url> [id|url ...] [--flags]
+```
+
+Fetch one or more books.
+A book is one printing, not the work behind it.
+
+| Flag | Meaning |
 |---|---|
-| `book` | Fetch one or more books from `/book/show/` (WAF-prone) |
-| `author` | Fetch one or more author profiles |
-| `series` | A series header, or its books with `--books` |
-| `list` | A Listopia list header, or its books with `--books` |
-| `quote` | Quotes from a quotes page, author, or book |
-| `user` | A public reader profile |
-| `shelf` | A reader's bookshelf (open RSS feed by default) |
-| `genre` | A genre header, or its book ids with `--books` |
-| `search` | Search books and authors via the open autocomplete endpoint |
-| `reviews` | Reviews embedded on a book page (WAF-prone) |
-| `similar` | Books similar to a given book (WAF-prone) |
-| `id` | Classify a URL or id into (entity, id) without fetching |
-| `seed` | Discover the sitemap tree from `robots.txt` |
-| `crawl` | Process the crawl queue: fetch, cache, optionally parse |
-| `db` | Inspect and export the local SQLite store |
-| `cache` | Inspect and clear the on-disk page cache |
-| `open` | Open a Goodreads page in the default browser |
-| `info` | Show configuration, paths, and the affiliation disclaimer |
-| `version` | Print version, commit, and build date |
-
-## book
-
-```
-goodread book <id|url> [id|url ...] [flags]
-```
-
-Fetches one or more books from the `/book/show/` page. `--with-reviews` also
-pulls the reviews embedded on the page. WAF-prone; `--cookies` helps when
-challenged.
+| `--check` | Read the book into the model and reconcile its numbers |
+| `--with-reviews` | Also fetch the reviews embedded on the page |
 
 ```bash
-goodread book 2767052 --format json
+goodread book 2767052
+goodread book 2767052 5907 --format csv
+goodread book https://www.goodreads.com/book/show/2767052 --json
+goodread book 2767052 --check
 ```
 
-## author
+### work
 
 ```
-goodread author <id|url> [id|url ...]
+goodread work <work-id|url>
 ```
 
-Fetches one or more author profiles.
+Read a work through its best edition.
+`/work/<id>` is disallowed, so this reads the editions page and then the first edition's own page, which carries the work with its places, characters and awards.
+Two requests, and the record says which edition it came through.
 
 ```bash
-goodread author 153394 1077326 --format csv
+goodread work 2792775
 ```
 
-## series
+### author
 
 ```
-goodread series <id|url> [--books]
+goodread author <id|url> [id|url ...] [--flags]
 ```
 
-The series header, or the books in it with `--books`.
+| Flag | Meaning |
+|---|---|
+| `--books` | List the author's books instead of the author |
 
-```bash
-goodread series 73758 --books
-```
-
-## list
+### series
 
 ```
-goodread list <id|url> [--books]
+goodread series <id|url> [--flags]
 ```
 
-A Listopia list header, or its books with `--books`.
+| Flag | Meaning |
+|---|---|
+| `--books` | List the series' books instead of the series header |
 
-```bash
-goodread list 1.Best_Books_Ever --books
-```
-
-## quote
+### editions
 
 ```
-goodread quote <url|author-id|book-id>
+goodread editions <work-id|url> [--flags]
 ```
 
-Quotes from a quotes-page URL, an author id, or a book id.
+Every printing of a work, which is where the ISBNs are.
 
-```bash
-goodread quote https://www.goodreads.com/work/quotes/2792775
+| Flag | Default | Meaning |
+|---|---|---|
+| `--page` | `1` | Which page of editions to read |
+| `--pages` | `1` | How many pages to read from `--page` onward |
+
+### quotes
+
+```
+goodread quotes <work-id|author-id|url> [--flags]
 ```
 
-## user
+| Flag | Default | Meaning |
+|---|---|---|
+| `--author` | off | Read the author's quotes page instead of a work's |
+| `--page` | `1` | Which page of quotes to read |
+| `--pages` | `1` | How many pages to read from `--page` onward |
+
+### genre
+
+```
+goodread genre <slug|url> [--flags]
+```
+
+| Flag | Meaning |
+|---|---|
+| `--books` | List the featured books instead of the genre |
+| `--related` | List the related genres, which is the graph this page alone publishes |
+
+### list
+
+```
+goodread list <id|url> [--flags]
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--books` | off | List the list's books instead of the list header |
+| `--page` | `1` | Which page of the list to read |
+
+### lookup
+
+```
+goodread lookup <isbn|isbn13|asin|title> [--flags]
+```
+
+Resolve an identifier to a book, through `/book/auto_complete`, which needs no key and is allowed.
+This is the allowed replacement for site search.
+
+| Flag | Meaning |
+|---|---|
+| `--ids` | Print the matching ids and stop, without reading the book pages |
+
+### similar
+
+```
+goodread similar <book-id|url>
+```
+
+The books Goodreads lists as similar to the one you name.
+
+## Disallowed by robots.txt
+
+These read surfaces Goodreads' `robots.txt` disallows, so they refuse without `--no-robots`.
+See [robots.txt and what it costs](/guides/robots-and-limits/).
+
+### search
+
+```
+goodread search <query> [--flags]
+```
+
+Autocomplete by default, which is allowed.
+`--deep` also reads `/search`, which is not.
+
+| Flag | Meaning |
+|---|---|
+| `--books` | Return rich book records from autocomplete |
+| `--deep` | Read `/search` as well, which needs `--no-robots` |
+
+### shelf
+
+```
+goodread shelf <user-id|url> [--flags]
+```
+
+Both routes are disallowed and need `--no-robots`.
+The RSS feed carries more per row than the rendered page does, and `--html` is the only way to get a whole shelf.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--shelf` | `read` | Shelf name: `read`, `currently-reading`, `to-read` or a custom one |
+| `--books` | off | List the rows instead of the shelf header |
+| `--html` | off | Walk the paginated HTML shelf instead of the RSS feed |
+| `--max-pages` | `1` | Maximum pages to walk in `--html` mode, `0` is all |
+
+### reviews
+
+```
+goodread reviews <book-id|url> [--flags]
+```
+
+The thirty reviews the book page embeds are allowed.
+`--all` walks `/book/reviews`, which is not, so it needs `--no-robots` and `--yes`.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--all` | off | Walk `/book/reviews` as well |
+| `--max-pages` | `10` | Pages of `/book/reviews` to walk with `--all` |
+| `--yes` | off | Go ahead with the requests `--all` costs |
+
+### user
 
 ```
 goodread user <id|url>
@@ -107,176 +194,225 @@ goodread user <id|url>
 
 A public reader profile.
 
-```bash
-goodread user 1
-```
+## The local store
 
-## shelf
+### find
 
 ```
-goodread shelf <user-id|url> [flags]
+goodread find <text> [--flags]
 ```
 
-A reader's bookshelf. `--shelf NAME` picks the shelf (`read`,
-`currently-reading`, `to-read`, or a custom name; default `read`). Reads the
-open RSS feed by default; `--html` walks the paginated HTML shelf instead, and
-`--max-pages N` caps how far (default 1, html mode).
+Full text search over the local store, offline.
 
-```bash
-goodread shelf 1 --shelf read --html --max-pages 3
-```
+| Flag | Meaning |
+|---|---|
+| `--kind` | Limit to one record kind: book, author, series, list, genre, user |
 
-## genre
+### query
 
 ```
-goodread genre <slug|url> [--books]
+goodread query <sql> [--flags]
 ```
 
-A genre header, or its book ids with `--books`.
+One read only SQL statement over the local store.
+`delete`, `update`, `drop` and `insert` are refused.
 
-```bash
-goodread genre fantasy --books
-```
+| Flag | Meaning |
+|---|---|
+| `--tables` | List the tables and views in the store and stop |
 
-## search
-
-```
-goodread search <query> [flags]
-```
-
-Searches books and authors through the open autocomplete endpoint. `--books`
-returns rich book records from the autocomplete payload. `--html` runs the full
-HTML search (paginated).
-
-```bash
-goodread search "the hunger games" -n 10
-```
-
-## reviews
+### graph
 
 ```
-goodread reviews <book-id|url>
+goodread graph <uri|id> [--flags]
 ```
 
-Reviews embedded on a book's page (WAF-prone).
+Walk the local graph around a node.
+A walk of more than 500 nodes needs `--yes`.
 
-```bash
-goodread reviews 2767052
+| Flag | Meaning |
+|---|---|
+| `--edges` | Print the edges rather than the nodes |
+| `--yes` | Go ahead with a walk of more than 500 nodes |
+
+`--depth` is global and applies here.
+
+### export
+
+```
+goodread export [--flags]
 ```
 
-## similar
+| Flag | Default | Meaning |
+|---|---|---|
+| `--to` | `jsonl` | `jsonl` or `rdf` |
+| `--kind` | all | Limit to these node kinds, repeatable |
+| `--edges` | off | Write the edge table instead of the nodes, jsonl only |
+
+### db
 
 ```
-goodread similar <book-id|url>
+goodread db [command]
 ```
 
-Books similar to the given book (WAF-prone).
+The v0.2.0 records table, which lives beside the graph tables.
 
-```bash
-goodread similar 2767052
+| Subcommand | Meaning |
+|---|---|
+| `db info` | Summarize stored records and the crawl queue |
+| `db count [entity-type]` | Count stored records, all types or one |
+| `db get <entity-type> <id>` | Print a stored record as JSON |
+| `db export [--flags]` | Export stored records to JSONL or NDJSON |
+| `db vacuum` | Compact the store database file |
+
+## Crawling
+
+### crawl
+
+```
+goodread crawl [--flags]
 ```
 
-## id
+Walk out from a set of seeds and build a store.
+One connection at the usual pace, and there is no parallelism flag.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--seed` | none | A `gr:` URI, a Goodreads URL or an id to start from, repeatable |
+| `--seed-file` | none | A file of seeds, one per line, `#` for a comment |
+| `--from-sitemap` | none | Seed from a sitemap category: author, list, quote, genre, user |
+| `--max` | `0` | Stop after this many pages, `0` is until the frontier is empty |
+| `--dry-run` | off | Print the plan and the request count, and read nothing |
+| `--reset` | off | Clear the frontier and start over, keeping the records |
+| `--yes` | off | Required alongside `--no-robots` |
+
+`--depth` is global and defaults to `1` hop of expansion here.
+
+### seed
+
+```
+goodread seed [--flags]
+```
+
+Discover sitemap categories, shards and page URLs.
+
+| Flag | Meaning |
+|---|---|
+| `--type` | Sitemap category to expand: author, list, quote, genre, user and more |
+| `--urls` | Drill into shards and emit page URLs |
+| `--max` | Cap the number of rows emitted, `0` is no limit |
+| `--enqueue` | Put the discovered URLs on the crawl frontier, with `--urls` |
+
+### cache
+
+```
+goodread cache [command]
+```
+
+| Subcommand | Meaning |
+|---|---|
+| `cache info` | Show cache location, file count and size |
+| `cache path <url>` | Print the cache path for a URL |
+| `cache clear` | Delete the entire page cache |
+
+## Serving
+
+### mcp
+
+```
+goodread mcp
+```
+
+Run as an MCP server over stdio, with eleven read tools.
+No search, no shelf, no reviews, and `--no-robots` has no effect on it.
+See [the MCP server](/guides/mcp/).
+
+## Inspecting
+
+### robots
+
+```
+goodread robots [command]
+```
+
+The rules, and which surfaces they permit.
+
+| Subcommand | Meaning |
+|---|---|
+| `robots check <url\|path>` | Say whether one URL may be fetched, and which rule decides |
+
+### extraction
+
+```
+goodread extraction
+```
+
+Which rung of the ladder answers for each surface, and how many CSS selectors are in play on each.
+
+### verify
+
+```
+goodread verify [--flags]
+```
+
+Check the extractor against the pinned captures.
+
+| Flag | Meaning |
+|---|---|
+| `--strict` | Exit non-zero when a known field went missing |
+| `--sample` | Read this many live book pages instead of the pinned captures |
+
+### id
 
 ```
 goodread id <url|id> [url|id ...]
 ```
 
-Classifies each argument into an (entity, id) pair without fetching. Pure local,
-never blocked.
+Classify a URL or id into (entity, id) without fetching.
+Pure local work, never blocked, made for scripts.
 
-```bash
-goodread id https://www.goodreads.com/book/show/2767052
-```
-
-## seed
+### open
 
 ```
-goodread seed [flags]
+goodread open <id|url>
 ```
 
-Discovers the sitemap tree advertised in `robots.txt`. No flags lists the
-categories. `--type <category>` lists that category's gzipped shard sitemaps.
-`--urls` drills into shards and emits page URLs (cap with `--max`). `--enqueue`
-enqueues discovered URLs into the crawl queue (with `--urls`).
+Open a Goodreads page in the default browser.
 
-```bash
-goodread seed --type quote --urls --max 50 --enqueue
-```
-
-## crawl
+### info
 
 ```
-goodread crawl [flags]
+goodread info
 ```
 
-Processes the crawl queue: fetch, cache, and with `--parse` parse each page into
-the records table. `--max N` caps the count (`0` drains the queue). Uses
-`--workers` and `--delay`. Exit 3 if nothing processed, exit 4 if some failed.
+Configuration, resolved paths and the affiliation disclaimer.
 
-```bash
-goodread crawl --max 50 --parse
+### version
+
+```
+goodread version
 ```
 
-## db
+Version, commit and build date.
 
-| Subcommand | Does |
+### completion
+
+```
+goodread completion [bash|zsh|fish|powershell]
+```
+
+Generate the shell completion script.
+
+## Exit codes
+
+| Code | Meaning |
 |---|---|
-| `db info` | Summarize stored records and the crawl queue |
-| `db count [entity-type]` | Count stored records |
-| `db get <entity-type> <id>` | Print a stored record as JSON |
-| `db export [--type T] [-o file] [--format jsonl]` | Export stored records |
-| `db vacuum` | Reclaim space in the store |
-
-```bash
-goodread db export --type quote -o quotes.jsonl --format jsonl
-```
-
-## cache
-
-| Subcommand | Does |
-|---|---|
-| `cache info` | Location, file count, and size |
-| `cache clear` | Remove every cached page |
-| `cache path <url>` | Print the cache file path for a URL |
-
-```bash
-goodread cache info
-```
-
-## Meta
-
-| Command | Does |
-|---|---|
-| `open <id\|url>` | Open a Goodreads page in the default browser |
-| `info` | Show configuration, paths, and the affiliation disclaimer |
-| `version` | Print version, commit, and build date |
-
-```bash
-goodread open 2767052
-```
-
-## Global flags
-
-These apply to every command. See [configuration](/reference/configuration/) for
-the full list and their defaults.
-
-| Flag | Meaning |
-|---|---|
-| `-f, --format` | Output format (default table on a TTY, jsonl piped) |
-| `--fields` | Comma-separated fields to show |
-| `--no-header` | Omit the header row in table/csv output |
-| `--template` | Go text/template applied per record |
-| `--color` | `auto`, `always`, or `never` |
-| `-n, --limit` | Maximum rows (`0` means all) |
-| `-q, --quiet` | Suppress progress output |
-| `--workers` | Concurrency (default 2) |
-| `--delay` | Minimum delay between requests (default 2s) |
-| `--timeout` | Per-request timeout (default 30s) |
-| `--retries` | Retry attempts (default 3) |
-| `--cache-ttl` | Cache lifetime (default 24h) |
-| `--no-cache` | Bypass the on-disk cache for this run |
-| `--refresh` | Force a re-fetch, ignoring the cache |
-| `--data-dir` | Root data directory (env `GOODREAD_DATA_DIR`) |
-| `--store` | SQLite store path (default `<data-dir>/goodread.db`) |
-| `--cookies` | Netscape cookie jar to lend a signed-in session |
+| `0` | success |
+| `1` | an error nothing else classified |
+| `2` | usage, including a config file that will not load |
+| `3` | network, meaning the site never answered |
+| `4` | the site answered and the answer was an error or a block |
+| `5` | extraction failed, or a record did not reconcile |
+| `6` | not found |
+| `7` | refused because `robots.txt` disallows the path |
+| `8` | `robots.txt` could not be read, so nothing can be checked against it |

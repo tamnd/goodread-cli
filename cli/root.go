@@ -90,9 +90,13 @@ func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "goodread",
 		Short: "Crawl and structure public Goodreads data",
-		Long: "goodread reads public Goodreads pages (books, authors, series, lists,\n" +
-			"quotes, users, shelves, genres, reviews, search) and returns rich,\n" +
-			"structured records as table, JSON, JSONL, CSV, TSV, or URLs.\n\n" +
+		Long: "goodread reads public Goodreads pages (books, works, authors, series,\n" +
+			"editions, lists, genres, quotes) into structured records, folds them\n" +
+			"into a local SQLite graph, and writes them out as table, JSON, JSONL,\n" +
+			"CSV, TSV, RDF or URLs.\n\n" +
+			"It obeys robots.txt. The search page, shelves, reviews and /work/<id>\n" +
+			"are disallowed and are not read without --no-robots. Run `goodread\n" +
+			"robots` to see every surface and the rule that decides it.\n\n" +
 			"goodread is an independent tool and is not affiliated with, endorsed by,\n" +
 			"or sponsored by Goodreads or Amazon.",
 		SilenceUsage:  true,

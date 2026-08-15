@@ -1,6 +1,6 @@
 title       = "goodread"
 baseURL     = "https://goodread-cli.tamnd.com/"
-description = "A fast, friendly command line for public Goodreads data. One binary that turns books, authors, series, lists, quotes, users, shelves, genres, reviews, and search into rich structured records as table, JSON, JSONL, CSV, TSV, or URLs."
+description = "A command line for public Goodreads data. One binary that reads books, works, authors, series, editions, lists, genres and quotes into structured records, folds them into a local SQLite graph, and writes them out as table, JSON, JSONL, CSV, TSV, RDF or URLs."
 contentDir  = "content"
 outputDir   = "public"
 theme       = "tago-doks"

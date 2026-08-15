@@ -6,7 +6,5 @@ weight: 20
 featured: true
 ---
 
-Each guide is built around a job rather than a command: looking up books and
-authors, searching and discovering, reading shelves and quotes, crawling in
-bulk into a local store, and shaping the output. They assume you have run the
-[quick start](/getting-started/quick-start/).
+Each guide is built around a job rather than a command: reading books, works, editions and the people behind them, querying the local graph offline, crawling into a store, serving the data to a model, living with `robots.txt`, and shaping the output.
+They assume you have run the [quick start](/getting-started/quick-start/).
