@@ -30,9 +30,12 @@ jobs:
       - uses: actions/checkout@v7.0.0
         with:
           fetch-depth: 0
+      # Same toolchain resolution as the release job below, so this gate runs
+      # against what a real release would use.
       - uses: actions/setup-go@v6.4.0
         with:
           go-version-file: go.mod
+          check-latest: true
           cache: true
       - uses: goreleaser/goreleaser-action@v7.2.2
         with:
@@ -52,10 +55,26 @@ jobs:
       - uses: actions/checkout@v7.0.0
         with:
           fetch-depth: 0
+      # check-latest so the release is built with the newest patch of the Go
+      # line in go.mod. Without it the runner's cached toolchain can be a patch
+      # or two behind, and every standard library CVE fixed in between ships in
+      # the binary. The govulncheck below is against the same toolchain, so the
+      # two agree.
       - uses: actions/setup-go@v6.4.0
         with:
           go-version-file: go.mod
+          check-latest: true
           cache: true
+
+      # ci.yml runs govulncheck on every push to main and every PR, which
+      # covers the branch but not the tag. A tag can be cut from a commit that
+      # was green a week ago, and the vulnerability database has moved since.
+      # This is the same check against the exact tree that is about to be
+      # published, and it gates the release rather than reporting after it.
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
 
       # Build and ship the linux/arm64 image from the amd64 runner.
       - uses: docker/setup-qemu-action@v4.1.0
