@@ -404,12 +404,11 @@ at a polite default rate, and respects each page's sign-in wall.
 data dir:  %s
 cache dir: %s
 store:     %s
-workers:   %d
 delay:     %s
 cache TTL: %s
 `,
 				Version, a.cfg.DataDir, a.cfg.CacheDir(), a.storePath(),
-				a.cfg.Workers, a.cfg.Delay, a.cfg.CacheTTL)
+				a.cfg.Delay, a.cfg.CacheTTL)
 			return nil
 		},
 	}
