@@ -7,12 +7,10 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 	"github.com/tamnd/goodread-cli/goodread"
-	"golang.org/x/sync/errgroup"
 )
 
 // seed ──────────────────────────────────────────────────────────────────────
@@ -98,7 +96,13 @@ func (a *App) seedCmd() *cobra.Command {
 					ent := goodread.InferEntityType(u)
 					rows = append(rows, row{URL: u, Entity: ent})
 					if enqueue {
-						_ = st.Enqueue(ctx, u, ent, 0)
+						// Onto the crawl frontier, keyed by URI. The sitemap
+						// spells a book both as /book/show/2767052 and as
+						// /book/show/2767052-the-hunger-games, and a queue keyed
+						// by URL would read that book twice.
+						if kind, id := goodread.Classify(u); id != "" {
+							_ = st.EnqueueURI(goodread.NodeURI(kind, id), u, kind, 0)
+						}
 					}
 				}
 				if max > 0 && len(rows) >= max {
@@ -112,126 +116,11 @@ func (a *App) seedCmd() *cobra.Command {
 			return a.renderOrEmpty(rows, len(rows))
 		},
 	}
-	cmd.Flags().BoolVar(&enqueue, "enqueue", false, "enqueue discovered URLs into the crawl queue (with --urls)")
+	cmd.Flags().BoolVar(&enqueue, "enqueue", false, "put the discovered URLs on the crawl frontier (with --urls)")
 	cmd.Flags().StringVar(&category, "type", "", "sitemap category to expand (author|list|quote|genre|user|...)")
 	cmd.Flags().BoolVar(&urlsMode, "urls", false, "drill into shards and emit page URLs")
 	cmd.Flags().IntVar(&max, "max", 0, "cap the number of rows emitted (0 = no limit)")
 	return cmd
-}
-
-// crawl ─────────────────────────────────────────────────────────────────────
-
-func (a *App) crawlCmd() *cobra.Command {
-	var (
-		max   int
-		parse bool
-	)
-	cmd := &cobra.Command{
-		Use:   "crawl",
-		Short: "Process the crawl queue (fetch, cache, optionally parse)",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx := cmd.Context()
-			st, err := a.openStore()
-			if err != nil {
-				return codeError(exitError, err)
-			}
-			if err := st.ResetActive(); err != nil {
-				return codeError(exitError, err)
-			}
-			var (
-				processed int
-				failed    int
-				mu        sync.Mutex
-			)
-			for max <= 0 || processed < max {
-				batch := a.cfg.Workers * 2
-				if max > 0 && processed+batch > max {
-					batch = max - processed
-				}
-				items, err := st.NextPending(ctx, batch)
-				if err != nil {
-					return codeError(exitError, err)
-				}
-				if len(items) == 0 {
-					break
-				}
-				g, gctx := errgroup.WithContext(ctx)
-				g.SetLimit(a.cfg.Workers)
-				for _, it := range items {
-					it := it
-					g.Go(func() error {
-						body, ferr := a.client.CachingFetch(gctx, a.cache, a.cfg, it.URL)
-						mu.Lock()
-						defer mu.Unlock()
-						if ferr != nil {
-							failed++
-							_ = st.MarkFailed(gctx, it.ID)
-							a.progressf("crawl %s: %v", it.URL, ferr)
-							return nil
-						}
-						if parse {
-							a.parseAndStore(st, it, body)
-						}
-						processed++
-						_ = st.MarkFetched(gctx, it.ID, a.cache.Path(it.URL))
-						return nil
-					})
-				}
-				if err := g.Wait(); err != nil {
-					return codeError(exitError, err)
-				}
-				a.progressf("crawled %d (failed %d)", processed, failed)
-			}
-			stats, _ := st.QueueStats()
-			fmt.Printf("done: processed=%d failed=%d queue=%v\n", processed, failed, stats)
-			if processed == 0 {
-				return codeError(exitNotFound, nil)
-			}
-			if failed > 0 {
-				return codeError(exitParse, nil)
-			}
-			return nil
-		},
-	}
-	cmd.Flags().IntVar(&max, "max", 0, "process at most this many items (0 = drain queue)")
-	cmd.Flags().BoolVar(&parse, "parse", false, "parse each fetched page into the records table")
-	return cmd
-}
-
-// parseAndStore parses a fetched page body by entity type and stores the record.
-func (a *App) parseAndStore(st *goodread.Store, it goodread.QueueItem, body []byte) {
-	doc, err := goodread.DocFromBytes(body)
-	if err != nil {
-		return
-	}
-	switch it.EntityType {
-	case "book":
-		_, id := goodread.Classify(it.URL)
-		if b, err := goodread.ParseBook(doc, id, it.URL); err == nil {
-			_ = st.Put("book", b.BookID, b.URL, b)
-		}
-	case "author":
-		_, id := goodread.Classify(it.URL)
-		if au, err := goodread.ParseAuthor(doc, id, it.URL); err == nil {
-			_ = st.Put("author", au.AuthorID, au.URL, au)
-		}
-	case "series":
-		_, id := goodread.Classify(it.URL)
-		if s, _, err := goodread.ParseSeries(doc, id, it.URL); err == nil {
-			_ = st.Put("series", s.SeriesID, s.URL, s)
-		}
-	case "list":
-		_, id := goodread.Classify(it.URL)
-		if l, _, err := goodread.ParseList(doc, id, it.URL); err == nil {
-			_ = st.Put("list", l.ListID, l.URL, l)
-		}
-	case "genre":
-		_, slug := goodread.Classify(it.URL)
-		if g, err := goodread.ParseGenre(doc, slug, it.URL); err == nil {
-			_ = st.Put("genre", g.Slug, g.URL, g)
-		}
-	}
 }
 
 // db ────────────────────────────────────────────────────────────────────────
