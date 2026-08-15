@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"github.com/tamnd/goodread-cli/goodread"
@@ -12,14 +15,23 @@ import (
 
 func (a *App) bookCmd() *cobra.Command {
 	var withReviews bool
+	var check bool
+	var depth string
 	cmd := &cobra.Command{
 		Use:     "book <id|url> [id|url ...]",
 		Short:   "Fetch one or more books",
 		Args:    cobra.MinimumNArgs(1),
-		Example: "  goodread book 2767052\n  goodread book https://www.goodreads.com/book/show/2767052 --format json",
+		Example: "  goodread book 2767052\n  goodread book https://www.goodreads.com/book/show/2767052 --format json\n  goodread book 2767052 --check",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			var books []*goodread.Book
+			if check {
+				d, ok := goodread.ParseDepth(depth)
+				if !ok {
+					return codeError(exitUsage, fmt.Errorf("unknown depth %q, want one of %s", depth, depthList()))
+				}
+				return a.bookCheck(ctx, args, d)
+			}
+			var books []*goodread.ScrapedBook
 			for _, arg := range args {
 				_, id := goodread.Classify(arg)
 				if id == "" {
@@ -47,7 +59,97 @@ func (a *App) bookCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&withReviews, "with-reviews", false, "also fetch embedded reviews (use the reviews command for detail)")
+	cmd.Flags().BoolVar(&check, "check", false, "read the book into the v0.3.0 model and reconcile its numbers")
+	cmd.Flags().StringVar(&depth, "depth", "meta", "how much to read: "+depthList())
 	return cmd
+}
+
+func depthList() string {
+	var out []string
+	for _, d := range goodread.Depths() {
+		out = append(out, string(d))
+	}
+	return strings.Join(out, ", ")
+}
+
+// bookCheck reads a book with the extractor and reconciles its statistics.
+//
+// Two reconciliations. The histogram has to sum to the ratings count, and the
+// mean derived from the histogram has to match the published average. The
+// second is the one worth having: five integers with no labels are exactly the
+// kind of thing that ends up reversed, and no amount of looking at the numbers
+// would tell you.
+func (a *App) bookCheck(ctx context.Context, args []string, depth goodread.Depth) error {
+	type result struct {
+		ID      string              `json:"id"`
+		Title   string              `json:"title"`
+		Check   goodread.StatsCheck `json:"check"`
+		Missed  []string            `json:"missed,omitempty"`
+		Fields  int                 `json:"fields"`
+		Surface string              `json:"surface"`
+	}
+
+	var out []result
+	problems := 0
+	for _, arg := range args {
+		_, id := goodread.Classify(arg)
+		if id == "" {
+			id = arg
+		}
+		rec, err := a.client.GetBookRecord(ctx, id, depth)
+		if err != nil {
+			if len(args) == 1 {
+				return mapFetchErr(err)
+			}
+			a.progressf("book %s: %v", arg, err)
+			continue
+		}
+		r := result{
+			ID:     id,
+			Title:  rec.Book.Title,
+			Check:  rec.Book.Stats.Check(),
+			Missed: rec.Book.Missed,
+			Fields: len(rec.Book.Via),
+		}
+		if len(rec.Book.Surfaces) > 0 {
+			r.Surface = rec.Book.Surfaces[0]
+		}
+		if !r.Check.OK {
+			problems++
+		}
+		out = append(out, r)
+	}
+	if len(out) == 0 {
+		return codeError(exitNoData, fmt.Errorf("nothing read"))
+	}
+
+	if a.format == string(FormatJSON) || a.format == string(FormatJSONL) {
+		if err := a.render(out); err != nil {
+			return err
+		}
+	} else {
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		if !a.noHeader {
+			fmt.Fprintln(w, "id\ttitle\tfields\tbuckets sum\tratings\tderived\tpublished\tok")
+		}
+		for _, r := range out {
+			fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%.4f\t%.2f\t%v\n",
+				r.ID, truncate(r.Title, 40), r.Fields,
+				r.Check.SumOfBuckets, r.Check.RatingsCount, r.Check.DerivedMean, r.Check.Published, r.Check.OK)
+		}
+		if err := w.Flush(); err != nil {
+			return err
+		}
+		for _, r := range out {
+			for _, p := range r.Check.Problems {
+				fmt.Fprintf(os.Stderr, "%s: %s\n", r.ID, p)
+			}
+		}
+	}
+	if problems > 0 {
+		return codeError(exitPartial, fmt.Errorf("%d book(s) did not reconcile", problems))
+	}
+	return nil
 }
 
 // author ────────────────────────────────────────────────────────────────────
@@ -211,7 +313,7 @@ func (a *App) userCmd() *cobra.Command {
 			if a.store != nil {
 				_ = a.store.Put("user", u.UserID, u.URL, u)
 			}
-			return a.renderOrEmpty([]*goodread.User{u}, 1)
+			return a.renderOrEmpty([]*goodread.ScrapedUser{u}, 1)
 		},
 	}
 }

@@ -86,6 +86,104 @@ func (e *Extractor) fromApollo(cache Apollo) {
 	e.contributorsFrom(cache, book)
 	e.workFrom(cache, book)
 	e.set("genres", LevelNextData, genresFrom(cache, book["bookGenres"]))
+	e.set("series", LevelNextData, seriesFrom(cache, book["bookSeries"]))
+
+	// links is a block of buy links and affiliate URLs. Kept whole and untyped
+	// because its shape moves, it is not worth a struct, and dropping it loses
+	// the ebook and audiobook availability that lives in it.
+	if raw, ok := book["links"]; ok && len(raw) > 0 {
+		e.set("links", LevelNextData, json.RawMessage(raw))
+	}
+
+	e.set("extra", LevelNextData, e.extraFrom(book, "Book", bookKnown))
+}
+
+// bookKnown is every field on the Book entity the model has a home for.
+//
+// Anything else goes to Extra and gets counted as unknown. A new field showing
+// up is Goodreads shipping something, which is a chance to model it rather than
+// a failure, and a record that quietly dropped it would never tell anybody.
+var bookKnown = map[string]bool{
+	"id": true, "legacyId": true, "title": true, "titleComplete": true,
+	"webUrl": true, "imageUrl": true, "description": true, "details": true,
+	"primaryContributorEdge": true, "secondaryContributorEdges": true,
+	"work": true, "bookGenres": true, "bookSeries": true, "links": true,
+}
+
+// workKnown is the same list for the Work entity.
+var workKnown = map[string]bool{
+	"id": true, "legacyId": true, "details": true, "stats": true,
+	"editions": true, "choiceAwards": true, "bestBook": true,
+	"quotes": true, "questions": true, "topics": true,
+}
+
+// extraFrom keeps the fields the model has no home for.
+//
+// Kept whole rather than described, because the point is that nobody has looked
+// at them yet. __typename is dropped: it is on every entity, it says nothing
+// the cache key does not already say, and carrying it in Extra would make every
+// record look like it had an unmodelled field.
+func (e *Extractor) extraFrom(entity map[string]json.RawMessage, kind string, known map[string]bool) map[string]json.RawMessage {
+	out := map[string]json.RawMessage{}
+	for field, raw := range entity {
+		name := ParseFieldKey(field).Name
+		if name == "__typename" || known[name] {
+			continue
+		}
+		e.NoteUnknown(kind + "." + name)
+		out[field] = raw
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// seriesEntryRaw is one series placement as the cache carries it.
+type seriesEntryRaw struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	URL    string `json:"web_url"`
+	Number string `json:"position"`
+}
+
+// seriesFrom reads bookSeries, keeping the position exactly as written.
+//
+// userPosition is a string and it has to stay one here. Goodreads uses 2.5 for
+// novellas and ranges like 1-3 for omnibus editions, so parsing to a float at
+// this layer would silently drop half the real values. The model parses it and
+// keeps the raw form alongside.
+func seriesFrom(cache Apollo, raw json.RawMessage) []seriesEntryRaw {
+	if len(raw) == 0 {
+		return nil
+	}
+	items, ok := cache.Resolve(raw).([]any)
+	if !ok {
+		return nil
+	}
+	var out []seriesEntryRaw
+	for _, it := range items {
+		m, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		s, ok := m["series"].(map[string]any)
+		if !ok {
+			continue
+		}
+		e := seriesEntryRaw{Number: strOfAny(m["userPosition"])}
+		e.ID = strOfAny(s["id"])
+		e.Name = strOfAny(s["title"])
+		if e.Name == "" {
+			e.Name = strOfAny(s["name"])
+		}
+		e.URL = strOfAny(s["webUrl"])
+		if e.ID == "" && e.Name == "" {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 type bookDetails struct {
@@ -193,10 +291,19 @@ func (e *Extractor) workFrom(cache Apollo, book map[string]json.RawMessage) {
 		}
 	}
 
+	if editions, ok := resolved["editions"].(map[string]any); ok {
+		e.set("editions_url", LevelNextData, strOfAny(editions["webUrl"]))
+		setNum(e, "editions_count", editions["totalCount"])
+	}
+	e.set("choice_awards", LevelNextData, resolved["choiceAwards"])
+
 	if details, ok := resolved["details"].(map[string]any); ok {
 		if s, ok := details["originalTitle"].(string); ok {
 			e.set("original_title", LevelNextData, s)
 		}
+		e.set("work_web_url", LevelNextData, strOfAny(details["webUrl"]))
+		e.set("work_shelves_url", LevelNextData, strOfAny(details["shelvesUrl"]))
+		setNum(e, "work_published_at_ms", details["publicationTime"])
 		// places and characters are curated lists nothing else in the family
 		// has, and they cost nothing extra to keep. A graph that can answer
 		// "which books are set in Dublin" is worth having.
@@ -212,6 +319,8 @@ func (e *Extractor) workFrom(cache Apollo, book map[string]json.RawMessage) {
 	if !ok {
 		return
 	}
+	e.set("work_extra", LevelNextData, e.extraFrom(work, "Work", workKnown))
+
 	legacy := e.Fields["work_legacy_id"]
 	for field := range work {
 		fk := ParseFieldKey(field)
@@ -220,7 +329,7 @@ func (e *Extractor) workFrom(cache Apollo, book map[string]json.RawMessage) {
 			case "quotes":
 				e.Miss("the book page carries %d quote of the work's set. `goodread quotes %v` reads /work/quotes for all of them.", n, legacy)
 			case "questions", "topics":
-				e.Miss("the book page carries %d %s of the work's set.", n, fk.Name)
+				e.Miss("the book page carries %d %s of the work's set.", n, plural(fk.Name, n))
 			}
 		}
 	}
@@ -229,8 +338,30 @@ func (e *Extractor) workFrom(cache Apollo, book map[string]json.RawMessage) {
 	}
 }
 
-// genresFrom flattens the bookGenres edge list to names.
-func genresFrom(cache Apollo, raw json.RawMessage) []string {
+// plural drops the s when there is one of something.
+//
+// The field names in the cache are plural because they name connections, and a
+// sentence built straight from one reads "carries 1 questions". These sentences
+// are the tool talking to a person, so they are worth getting right.
+func plural(name string, n int) string {
+	if n == 1 {
+		return strings.TrimSuffix(name, "s")
+	}
+	return name
+}
+
+// genreRaw is one genre as it hangs off a book.
+type genreRaw struct {
+	Name string `json:"name"`
+	URL  string `json:"web_url"`
+}
+
+// genresFrom flattens the bookGenres edge list.
+//
+// The URL comes along because it carries the genre's slug, which is the only
+// stable handle on a genre. Names collide and get retitled; the slug in the URL
+// is what /genres/fantasy is keyed on.
+func genresFrom(cache Apollo, raw json.RawMessage) []genreRaw {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -238,7 +369,7 @@ func genresFrom(cache Apollo, raw json.RawMessage) []string {
 	if !ok {
 		return nil
 	}
-	var out []string
+	var out []genreRaw
 	for _, it := range items {
 		m, ok := it.(map[string]any)
 		if !ok {
@@ -248,9 +379,11 @@ func genresFrom(cache Apollo, raw json.RawMessage) []string {
 		if !ok {
 			continue
 		}
-		if name, ok := g["name"].(string); ok && name != "" {
-			out = append(out, name)
+		name := strOfAny(g["name"])
+		if name == "" {
+			continue
 		}
+		out = append(out, genreRaw{Name: name, URL: strOfAny(g["webUrl"])})
 	}
 	return out
 }

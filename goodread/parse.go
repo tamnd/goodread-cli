@@ -56,8 +56,8 @@ func parseAuthorField(raw json.RawMessage) authorObj {
 }
 
 // ParseBook parses a Goodreads book page into a Book (JSON-LD first).
-func ParseBook(doc *goquery.Document, bookID, pageURL string) (*Book, error) {
-	b := &Book{BookID: bookID, URL: pageURL, FetchedAt: time.Now()}
+func ParseBook(doc *goquery.Document, bookID, pageURL string) (*ScrapedBook, error) {
+	b := &ScrapedBook{BookID: bookID, URL: pageURL, FetchedAt: time.Now()}
 
 	doc.Find(`script[type="application/ld+json"]`).Each(func(_ int, sel *goquery.Selection) {
 		if b.Title != "" {
@@ -308,7 +308,7 @@ type seriesHeaderProps struct {
 type seriesListProps struct {
 	SeriesHeaders []string `json:"seriesHeaders"`
 	Series        []struct {
-		Book rawBook `json:"book"`
+		ScrapedBook rawBook `json:"book"`
 	} `json:"series"`
 }
 
@@ -356,11 +356,11 @@ func ParseSeries(doc *goquery.Document, seriesID, pageURL string) (*Series, []Se
 			if i < len(lp.SeriesHeaders) {
 				label = lp.SeriesHeaders[i]
 			}
-			addBook(entry.Book.BookID, label)
+			addBook(entry.ScrapedBook.BookID, label)
 			if firstAuthorName == "" {
-				firstAuthorName = entry.Book.Author.Name
-				if entry.Book.Author.ID > 0 {
-					firstAuthorID = strconv.FormatInt(entry.Book.Author.ID, 10)
+				firstAuthorName = entry.ScrapedBook.Author.Name
+				if entry.ScrapedBook.Author.ID > 0 {
+					firstAuthorID = strconv.FormatInt(entry.ScrapedBook.Author.ID, 10)
 				}
 			}
 		}
@@ -646,8 +646,8 @@ var (
 // username, location, and total books; the stats line carries ratings, avg, and
 // reviews; the read-shelf link carries the read count; and the friends header
 // (not the friend list) carries the friends count.
-func ParseUser(doc *goquery.Document, userID, pageURL string) (*User, error) {
-	u := &User{UserID: userID, URL: pageURL, FetchedAt: time.Now()}
+func ParseUser(doc *goquery.Document, userID, pageURL string) (*ScrapedUser, error) {
+	u := &ScrapedUser{UserID: userID, URL: pageURL, FetchedAt: time.Now()}
 	u.Name = strings.Join(strings.Fields(doc.Find("h1.userProfileName, [data-testid='name']").First().Text()), " ")
 	if u.Name == "" {
 		u.Name = strings.Join(strings.Fields(doc.Find("h1").First().Text()), " ")
@@ -809,8 +809,8 @@ type reviewJSONLD struct {
 }
 
 // ParseReviews extracts embedded reviews from a book page.
-func ParseReviews(doc *goquery.Document, bookID string) []Review {
-	var reviews []Review
+func ParseReviews(doc *goquery.Document, bookID string) []ScrapedReview {
+	var reviews []ScrapedReview
 	doc.Find(`script[type="application/ld+json"]`).Each(func(_ int, sel *goquery.Selection) {
 		var raw map[string]json.RawMessage
 		if err := json.Unmarshal([]byte(sel.Text()), &raw); err != nil {
@@ -828,7 +828,7 @@ func ParseReviews(doc *goquery.Document, bookID string) []Review {
 			}
 		}
 		for _, r := range jr {
-			rv := Review{BookID: bookID, Text: cleanHTML(r.ReviewBody), FetchedAt: time.Now()}
+			rv := ScrapedReview{BookID: bookID, Text: cleanHTML(r.ReviewBody), FetchedAt: time.Now()}
 			rv.Rating, _ = strconv.Atoi(r.ReviewRating.RatingValue)
 			rv.UserName = r.Author.Name
 			rv.UserID = extractIDFromPath(r.Author.URL, "/user/show/")
@@ -846,7 +846,7 @@ func ParseReviews(doc *goquery.Document, bookID string) []Review {
 	})
 	if len(reviews) == 0 {
 		doc.Find("[data-testid='review'], .ReviewCard, .review").Each(func(_ int, sel *goquery.Selection) {
-			rv := Review{BookID: bookID, FetchedAt: time.Now()}
+			rv := ScrapedReview{BookID: bookID, FetchedAt: time.Now()}
 			sel.Find("a[href*='/review/show/']").EachWithBreak(func(_ int, a *goquery.Selection) bool {
 				href, _ := a.Attr("href")
 				if m := reReviewID.FindStringSubmatch(href); len(m) > 1 {
@@ -937,8 +937,8 @@ type rawBook struct {
 }
 
 // toBook converts a raw embedded book record into a Book.
-func (it rawBook) toBook() Book {
-	b := Book{
+func (it rawBook) toBook() ScrapedBook {
+	b := ScrapedBook{
 		BookID:             it.BookID,
 		WorkID:             it.WorkID,
 		Title:              it.Title,
@@ -969,12 +969,12 @@ func (it rawBook) toBook() Book {
 // ParseAutocompleteBooks parses the rich JSON autocomplete response into Book
 // records. The autocomplete endpoint is open (not WAF-challenged), so it is the
 // primary way to obtain structured book data without a lent session.
-func ParseAutocompleteBooks(body []byte) []Book {
+func ParseAutocompleteBooks(body []byte) []ScrapedBook {
 	var items []rawBook
 	if err := json.Unmarshal(body, &items); err != nil {
 		return nil
 	}
-	out := make([]Book, 0, len(items))
+	out := make([]ScrapedBook, 0, len(items))
 	for _, it := range items {
 		out = append(out, it.toBook())
 	}

@@ -2,6 +2,7 @@ package goodread
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 )
@@ -120,6 +121,17 @@ type Extractor struct {
 	Surface string
 	Fields  map[string]any
 	Levels  Levels
+
+	// Empty is the fields the surface carried but carried blank.
+	//
+	// This is row three of the four states of a missing field, and it is a
+	// different fact from row two. A book with a blank publisher is a book
+	// Goodreads has no publisher for; a book with no publisher key at all, read
+	// at a depth that never fetched details, is a book nobody asked about. The
+	// model turns this into a via entry with no value, which is how a consumer
+	// tells the two apart.
+	Empty map[string]int
+
 	Missed  []string
 	Unknown map[string]int
 }
@@ -130,6 +142,7 @@ func NewExtractor(surface string) *Extractor {
 		Surface: surface,
 		Fields:  map[string]any{},
 		Levels:  Levels{},
+		Empty:   map[string]int{},
 		Unknown: map[string]int{},
 	}
 }
@@ -140,12 +153,20 @@ func NewExtractor(surface string) *Extractor {
 // already there by the time level 2 runs, and letting a lower rung overwrite a
 // higher one would quietly downgrade a field that was read correctly.
 func (e *Extractor) set(field string, level int, v any) {
-	if v == nil || isZeroish(v) {
+	if v == nil {
 		return
 	}
 	if _, seen := e.Fields[field]; seen {
 		return
 	}
+	if isZeroish(v) {
+		// The page said this field exists and said nothing in it. Recorded, not
+		// stored, so a later rung of the ladder can still fill it and so the
+		// level counts stay a count of fields that have values.
+		e.Empty[field] = level
+		return
+	}
+	delete(e.Empty, field)
 	e.Fields[field] = v
 	e.Levels[field] = level
 }
@@ -180,6 +201,16 @@ func isZeroish(v any) bool {
 		return len(t) == 0
 	case nil:
 		return true
+	}
+	// Every other slice and map shape, by reflection rather than by a type
+	// switch that has to grow a case every time a parser returns a new struct.
+	// An empty places list is the page saying the work has no places, which is
+	// row three, not a value.
+	switch rv := reflect.ValueOf(v); rv.Kind() {
+	case reflect.Slice, reflect.Map, reflect.Array:
+		return rv.Len() == 0
+	case reflect.Ptr, reflect.Interface:
+		return rv.IsNil()
 	}
 	return false
 }

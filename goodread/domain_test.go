@@ -45,7 +45,7 @@ func TestHostMintLinksResolve(t *testing.T) {
 		t.Fatal("goodreads not mounted on host")
 	}
 
-	b := &goodread.Book{
+	b := &goodread.ScrapedBook{
 		BookID:         "2767052",
 		AuthorID:       "153394",
 		SeriesID:       "73758",

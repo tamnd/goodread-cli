@@ -9,7 +9,7 @@ import (
 var ErrNotFound = fmt.Errorf("not found")
 
 // GetBook fetches and parses a book page by id (or id-with-slug).
-func (c *Client) GetBook(ctx context.Context, id string) (*Book, error) {
+func (c *Client) GetBook(ctx context.Context, id string) (*ScrapedBook, error) {
 	u := BookURL(id)
 	doc, code, err := c.FetchHTML(ctx, u)
 	if err != nil {
@@ -74,7 +74,7 @@ func (c *Client) GetGenre(ctx context.Context, slug string) (*Genre, error) {
 }
 
 // GetUser fetches and parses a public user profile by id.
-func (c *Client) GetUser(ctx context.Context, id string) (*User, error) {
+func (c *Client) GetUser(ctx context.Context, id string) (*ScrapedUser, error) {
 	u := UserURL(id)
 	doc, code, err := c.FetchHTML(ctx, u)
 	if err != nil {
@@ -99,7 +99,7 @@ func (c *Client) GetQuotes(ctx context.Context, pageURL string) ([]Quote, error)
 }
 
 // GetReviews fetches a book page and returns the reviews embedded on it.
-func (c *Client) GetReviews(ctx context.Context, bookID string) ([]Review, error) {
+func (c *Client) GetReviews(ctx context.Context, bookID string) ([]ScrapedReview, error) {
 	u := BookURL(bookID)
 	doc, code, err := c.FetchHTML(ctx, u)
 	if err != nil {
@@ -154,7 +154,7 @@ func (c *Client) GetShelf(ctx context.Context, userID, shelfName string, maxPage
 }
 
 // SearchBooks returns rich Book records from the open autocomplete endpoint.
-func (c *Client) SearchBooks(ctx context.Context, query string, limit int) ([]Book, error) {
+func (c *Client) SearchBooks(ctx context.Context, query string, limit int) ([]ScrapedBook, error) {
 	body, code, err := c.Fetch(ctx, SearchAutocompleteURL(query))
 	if err != nil {
 		return nil, err

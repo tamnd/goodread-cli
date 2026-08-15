@@ -115,12 +115,26 @@ func (a *App) printExtraction() error {
 // to capture it. A known field disappearing is more urgent and gets its own line.
 func (a *App) verifyCmd() *cobra.Command {
 	var strict bool
+	var sample int
 	cmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Check the extractor against the pinned captures",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			reports, err := goodread.VerifyCaptures()
+			// --sample reads live pages instead of the captures. It is the check
+			// the captures cannot do: a capture keeps extracting cleanly forever,
+			// including on the day the page changes, which is exactly when
+			// somebody needs to hear about it.
+			// One or the other, never both. The captures live in the source
+			// tree and a live sample has to work from an installed binary too,
+			// so reading them first would fail for anybody with no checkout.
+			var reports []goodread.VerifyReport
+			var err error
+			if sample != 0 {
+				reports, err = goodread.VerifySample(cmd.Context(), a.client, sample)
+			} else {
+				reports, err = goodread.VerifyCaptures()
+			}
 			if err != nil {
 				return err
 			}
@@ -158,5 +172,6 @@ func (a *App) verifyCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&strict, "strict", false, "exit non-zero when a known field went missing")
+	cmd.Flags().IntVar(&sample, "sample", 0, "read this many live book pages instead of the pinned captures")
 	return cmd
 }
