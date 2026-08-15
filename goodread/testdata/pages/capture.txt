@@ -1,0 +1,19 @@
+# Golden captures.
+#
+# file<TAB>surface<TAB>captured<TAB>url<TAB>why
+#
+# Every file in this directory must have a line here and every line must have a
+# file, and TestCaptureLedger fails on either mismatch. A capture with no line
+# is a page nobody can say the provenance of, which is the same as no capture.
+#
+# All captures fetched with the tool's own User-Agent at the 2 second default
+# pace. Stored gzipped, since a book page is a megabyte and the repo should not
+# carry fifteen of them.
+
+book_show_2767052.html.gz	s1	2026-08-15	https://www.goodreads.com/book/show/2767052	popular book, dense cache, 129 entities, full stats and distribution
+book_show_1885.html.gz	s1	2026-08-15	https://www.goodreads.com/book/show/1885	second book page, a different cache shape to check the extractor is not fitted to one page
+author_show_1077326.html.gz	s2	2026-08-15	https://www.goodreads.com/author/show/1077326	prolific author, and a Rails page rather than a Next.js one
+work_editions_2792775.html.gz	s6	2026-08-15	https://www.goodreads.com/work/editions/2792775	the first robots.txt exception path
+work_quotes_2792775.html.gz	s7	2026-08-15	https://www.goodreads.com/work/quotes/2792775	the second exception path
+list_show_1.html.gz	s4	2026-08-15	https://www.goodreads.com/list/show/1	Listopia, ranked books
+genres_fantasy.html.gz	s5	2026-08-15	https://www.goodreads.com/genres/fantasy	genre page, featured books and related genres

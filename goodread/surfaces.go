@@ -151,6 +151,17 @@ func LookupOp(name string) (Op, bool) {
 	return Op{}, false
 }
 
+// LookupSurface finds the first op on a surface, so a surface id can be
+// validated and named without the caller knowing which ops share it.
+func LookupSurface(surface string) (Op, bool) {
+	for _, o := range Ops {
+		if o.Surface == surface {
+			return o, true
+		}
+	}
+	return Op{}, false
+}
+
 // SampleArgs are stand-in arguments per op, used by the policy tests and by
 // `goodread robots` so both can render a real path for every registered op
 // without inventing one at each call site.
