@@ -27,7 +27,13 @@ import (
 // One table each rather than a single polymorphic table, because the columns
 // that matter differ: a book has an ISBN13 and an ASIN and `goodread lookup`
 // has to hit an index on them, and no other node type has anything like them.
-var nodeTables = []string{"books", "works", "authors", "series", "lists", "genres", "quotes", "shelves", "users"}
+var nodeTables = []string{"books", "works", "authors", "series", "lists", "genres", "quotes", "shelves", "users", "places", "characters", "awards"}
+
+// nodeKinds is the same set spelled the way the model and the URIs spell it.
+//
+// Written out rather than derived from nodeTables, because the plural of series
+// is series and any rule that turns one list into the other gets that wrong.
+var nodeKinds = []string{"book", "work", "author", "series", "list", "genre", "quote", "shelf", "user", "place", "character", "award"}
 
 // graphSchema is the shared shape.
 //
@@ -155,6 +161,15 @@ func tableFor(kind string) (string, error) {
 		return "shelves", nil
 	case "user", "users":
 		return "users", nil
+	// The three whose id is their own name. They have no page of their own on
+	// Goodreads, so nothing ever fetches one, but a work names them and an edge
+	// needs somewhere to land.
+	case "place", "places":
+		return "places", nil
+	case "character", "characters":
+		return "characters", nil
+	case "award", "awards":
+		return "awards", nil
 	default:
 		return "", fmt.Errorf("no table for %q", kind)
 	}
@@ -270,6 +285,13 @@ func (s *Store) indexNode(n Node) error {
 func (s *Store) PutEdge(src, predicate, dst string, props any, surface string, seenAt time.Time) error {
 	if src == "" || dst == "" || predicate == "" {
 		return fmt.Errorf("an edge needs a src, a predicate and a dst")
+	}
+	// The edge set is closed. A predicate nothing knows about is one nobody can
+	// query for, so it is a mistake in the indexer rather than a fact, and it is
+	// worth refusing here where the name is still in front of somebody instead
+	// of finding it later as a row that never comes back.
+	if _, ok := Predicates[predicate]; !ok {
+		return fmt.Errorf("%q is not one of the edges in 04_graph.md: %s", predicate, strings.Join(PredicateNames(), ", "))
 	}
 	var raw any
 	if props != nil {

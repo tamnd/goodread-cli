@@ -1,7 +1,9 @@
 package goodread
 
 import (
+	"context"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -54,28 +56,35 @@ func TestIndexBookCaptureBuildsTheGraph(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var toWork bool
+	toWork := false
+	byAuthor := map[string]string{}
 	for _, e := range out {
-		if e.Predicate == "edition_of" {
+		switch e.Predicate {
+		case EdgeEditionOf:
 			toWork = true
+		case EdgeContributed:
+			byAuthor[e.Dst] = string(e.Props)
 		}
 	}
 	if !toWork && w != nil {
 		t.Errorf("no edge from the edition to its work: %+v", out)
 	}
-
-	in, err := s.Edges("gr:book/2767052", true)
-	if err != nil {
-		t.Fatal(err)
+	if len(byAuthor) == 0 {
+		t.Errorf("nobody wrote it: %+v", out)
 	}
-	var wrote bool
-	for _, e := range in {
-		if e.Predicate == "wrote" {
-			wrote = true
+	// The role rides on the edge, which is the point of the edge carrying
+	// properties at all: an illustrator recorded as the author is a wrong fact
+	// that spreads everywhere the author does.
+	for _, c := range b.Contributors {
+		if c.Role == "" || c.LegacyID == 0 {
+			continue
 		}
-	}
-	if !wrote {
-		t.Errorf("nobody wrote it: %+v", in)
+		dst := NodeURI("author", strconv.FormatInt(c.LegacyID, 10))
+		if props, ok := byAuthor[dst]; !ok {
+			t.Errorf("%s contributed and has no edge", c.Name)
+		} else if !strings.Contains(props, c.Role) {
+			t.Errorf("the edge to %s does not carry the role %q: %s", c.Name, c.Role, props)
+		}
 	}
 	if len(b.Contributors) > 0 {
 		au := NodeURI("author", strconv.FormatInt(b.Contributors[0].LegacyID, 10))
@@ -106,15 +115,29 @@ func TestIndexListPutsItsRowsInTheStore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	edges, err := s.Edges(NodeURI("list", l.ID), false)
+	// The edge runs book to list, so the list reads it as an incoming one.
+	edges, err := s.Edges(NodeURI("list", l.ID), true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(edges) == 0 {
 		t.Fatalf("the list contains %d books and no edges were written", len(l.Books))
 	}
-	if edges[0].Predicate != "contains" {
-		t.Errorf("predicate = %q", edges[0].Predicate)
+	var ranked int
+	for _, e := range edges {
+		if e.Predicate != EdgeListedIn {
+			t.Errorf("predicate = %q", e.Predicate)
+			break
+		}
+		// The position is on the edge and not on the book, because a book sits
+		// at rank 3 on one list and rank 900 on another and the rank belongs to
+		// neither of them alone.
+		if strings.Contains(string(e.Props), `"position"`) {
+			ranked++
+		}
+	}
+	if ranked != len(edges) {
+		t.Errorf("%d of %d rows carry their position", ranked, len(edges))
 	}
 
 	// And the rows are books in their own right, findable by title.
@@ -122,7 +145,7 @@ func TestIndexListPutsItsRowsInTheStore(t *testing.T) {
 	if title == "" {
 		title = l.Books[0].Book.Title
 	}
-	if _, err := s.GetNode("book", edges[0].Dst); err != nil {
+	if _, err := s.GetNode("book", edges[0].Src); err != nil {
 		t.Errorf("row %q is an edge to a book that is not stored: %v", title, err)
 	}
 }
@@ -174,5 +197,48 @@ func TestURIComesFromTheLegacyID(t *testing.T) {
 	// A genre has no numeric id anywhere and its natural key is the slug.
 	if got := uriOf("genre", "", map[string]any{"name": "Science Fiction"}); got != "gr:genre/science-fiction" {
 		t.Errorf("uriOf on a genre = %q", got)
+	}
+}
+
+// TestBothIDSpacesSurviveTheRoundTrip. 04_graph.md section 1: the legacy id and
+// the kca id are both real and neither is derivable from the other. A store that
+// kept one of them would be a store that could only be joined one way, so this
+// reads them back out of the columns rather than trusting the record.
+func TestBothIDSpacesSurviveTheRoundTrip(t *testing.T) {
+	e, err := ExtractBook(readCapture(t, "book_show_2767052.html.gz"))
+	if err != nil {
+		t.Fatalf("ExtractBook: %v", err)
+	}
+	b, err := BookFrom(e, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("BookFrom: %v", err)
+	}
+	if b.ID == "" || b.LegacyID == 0 {
+		t.Fatalf("the capture parsed with id=%q legacy_id=%d, so this test proves nothing", b.ID, b.LegacyID)
+	}
+
+	s := testStore(t)
+	w, _ := WorkFrom(e, time.Now().UTC())
+	if err := s.Put("book", "2767052", b.WebURL, &BookRecord{Book: b, Work: w}); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := s.Query(context.Background(), `select id, legacy_id from books where uri = 'gr:book/2767052'`, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("%d rows", len(rows))
+	}
+	if got := rows[0].Cells()["id"]; got != b.ID {
+		t.Errorf("the kca id came back as %q, want %q", got, b.ID)
+	}
+	if got := rows[0].Cells()["legacy_id"]; got != strconv.FormatInt(b.LegacyID, 10) {
+		t.Errorf("the legacy id came back as %q, want %d", got, b.LegacyID)
+	}
+	// And the URI is built from the legacy one, never the kca one, because a
+	// kca id is not what a link or a fifteen year old dataset carries.
+	if !strings.HasSuffix(NodeURI("book", strconv.FormatInt(b.LegacyID, 10)), "/2767052") {
+		t.Error("the uri is not the legacy id")
 	}
 }

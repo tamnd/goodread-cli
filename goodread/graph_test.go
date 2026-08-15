@@ -246,27 +246,29 @@ func TestReindexOnRetitle(t *testing.T) {
 func TestEdgesRunBothWays(t *testing.T) {
 	s := testStore(t)
 	now := time.Now().UTC()
-	if err := s.PutEdge("gr:author/153394", "wrote", "gr:book/2767052", map[string]string{"role": "Author"}, "s1", now); err != nil {
+	if err := s.PutEdge("gr:book/2767052", EdgeContributed, "gr:author/153394", map[string]string{"role": "Author"}, "s1", now); err != nil {
 		t.Fatal(err)
 	}
-	out, err := s.Edges("gr:author/153394", false)
+	out, err := s.Edges("gr:book/2767052", false)
 	if err != nil || len(out) != 1 {
 		t.Fatalf("outgoing = %+v, %v", out, err)
 	}
 	if string(out[0].Props) == "" {
 		t.Error("the role was dropped, and it is the difference between an author and an illustrator")
 	}
-	in, err := s.Edges("gr:book/2767052", true)
+	// And the same edge read from the far end, which is the whole reason the
+	// direction the spec picked does not decide what anybody can ask.
+	in, err := s.Edges("gr:author/153394", true)
 	if err != nil || len(in) != 1 {
 		t.Fatalf("incoming = %+v, %v", in, err)
 	}
 
 	// Written again with no props. The props that were there stay, same rule as
 	// the record merge: a later read that did not look does not erase.
-	if err := s.PutEdge("gr:author/153394", "wrote", "gr:book/2767052", nil, "s4", now.Add(time.Hour)); err != nil {
+	if err := s.PutEdge("gr:book/2767052", EdgeContributed, "gr:author/153394", nil, "s4", now.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	out, _ = s.Edges("gr:author/153394", false)
+	out, _ = s.Edges("gr:book/2767052", false)
 	if len(out) != 1 {
 		t.Fatalf("the edge was duplicated: %+v", out)
 	}

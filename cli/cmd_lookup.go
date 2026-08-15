@@ -185,7 +185,7 @@ func (a *App) queryCmd() *cobra.Command {
 		Args: cobra.ArbitraryArgs,
 		Example: "  goodread query --tables\n" +
 			"  goodread query \"select title, isbn13 from books where num_pages > 500\"\n" +
-			"  goodread query \"select dst from edges where src = 'gr:author/153394' and predicate = 'wrote'\"\n" +
+			"  goodread query \"select src from edges where dst = 'gr:author/153394' and predicate = 'contributed_by'\"\n" +
 			"  goodread query \"select json_extract(json,'$.stats.average_rating') as rating, title from books order by rating desc limit 10\"",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			st, err := a.openStore()
