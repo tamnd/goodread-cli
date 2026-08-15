@@ -130,6 +130,40 @@ func TestBurstIsOne(t *testing.T) {
 	}
 }
 
+// TestNoConcurrency asserts the transport is pinned to one connection per host
+// and that no Config field widens it.
+//
+// The pace floor is about the interval between requests. This is about how
+// many can be in flight at once, which is the same pressure by another route:
+// a 1s floor with eight connections is eight requests a second as far as the
+// site is concerned.
+func TestNoConcurrency(t *testing.T) {
+	if MaxWorkers != 1 {
+		t.Fatalf("MaxWorkers = %d, want 1", MaxWorkers)
+	}
+	tr := transport()
+	if tr.MaxConnsPerHost != 1 {
+		t.Errorf("MaxConnsPerHost = %d, want 1", tr.MaxConnsPerHost)
+	}
+	if tr.MaxIdleConns != 1 {
+		t.Errorf("MaxIdleConns = %d, want 1", tr.MaxIdleConns)
+	}
+
+	// transport takes no argument on purpose, so there is nothing a caller can
+	// pass that widens the pool. If that changes, this test should be the thing
+	// that notices.
+	cfg := DefaultConfig()
+	cfg.Workers = 64
+	c := NewClient(cfg)
+	got, ok := c.http.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("client transport is %T, not *http.Transport", c.http.Transport)
+	}
+	if got.MaxConnsPerHost != 1 {
+		t.Errorf("Workers=64 produced MaxConnsPerHost = %d, want 1", got.MaxConnsPerHost)
+	}
+}
+
 func TestClampDelay(t *testing.T) {
 	cases := []struct {
 		in      time.Duration
