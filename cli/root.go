@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -34,13 +35,23 @@ type App struct {
 	quiet    bool
 }
 
-// exit codes (see spec §6).
+// exit codes.
+//
+// 7 and 8 are separate on purpose. 7 is a decision the user can reverse by
+// passing --no-robots. 8 is the tool refusing to guess because it could not
+// read the rules at all, and no flag turns that into a proceed.
+//
+// The other five keep their v0.2.0 meanings for now. Renumbering them to match
+// the spec's table is part of M4, where the rest of the command surface moves
+// and one breaking change can be documented in one place.
 const (
-	exitError   = 1
-	exitUsage   = 2
-	exitNoData  = 3
-	exitPartial = 4
-	exitBlocked = 5
+	exitError      = 1
+	exitUsage      = 2
+	exitNoData     = 3
+	exitPartial    = 4
+	exitBlocked    = 5
+	exitDisallowed = 7
+	exitNoRobots   = 8
 )
 
 // ExitError carries a process exit code up to main.
@@ -102,7 +113,13 @@ func NewRootCmd() *cobra.Command {
 	pf.BoolVar(&app.cfg.Refresh, "refresh", false, "force re-fetch and overwrite the cache")
 	pf.StringVar(&app.cfg.DataDir, "data-dir", app.cfg.DataDir, "root directory for cache and store")
 	pf.StringVar(&app.storePtr, "store", "", "SQLite store path (default: <data-dir>/goodread.db)")
-	pf.StringVar(&app.cfg.CookiePath, "cookies", "", "Netscape cookie jar for a lent session")
+	pf.StringVar(&app.cfg.UserAgent, "user-agent", goodread.DefaultUserAgent(), "User-Agent header")
+
+	// --no-robots is bound straight to the config field and to nothing else.
+	// It is deliberately absent from the config file and from the environment,
+	// and TestNoRobotsNotInConfig and TestNoRobotsNotInEnv hold that.
+	pf.BoolVar(&app.cfg.NoRobots, "no-robots", false,
+		"read paths that robots.txt disallows. warns once, and the pace floor still applies")
 
 	root.AddCommand(
 		app.bookCmd(),
@@ -122,6 +139,7 @@ func NewRootCmd() *cobra.Command {
 		app.dbCmd(),
 		app.openCmd(),
 		app.cacheCmd(),
+		app.robotsCmd(),
 		app.infoCmd(),
 		app.versionCmd(),
 	)
@@ -137,19 +155,21 @@ func (a *App) setup(cmd *cobra.Command) error {
 			a.format = string(FormatJSONL)
 		}
 	}
-	if a.cfg.CookiePath != "" {
-		cookies, err := goodread.LoadCookies(a.cfg.CookiePath)
-		if err != nil {
-			return codeError(exitUsage, fmt.Errorf("load cookies: %w", err))
-		}
-		c, err := goodread.NewClientWithCookies(a.cfg, cookies)
-		if err != nil {
-			return err
-		}
-		a.client = c
-	} else {
-		a.client = goodread.NewClient(a.cfg)
+	// Clamp before the client sees it, and say so. A pace below the floor is
+	// neither honoured nor silently dropped.
+	if d, clamped := goodread.ClampDelay(a.cfg.Delay); clamped {
+		fmt.Fprintf(os.Stderr, "note: --delay %s is below the %s floor, using %s\n",
+			a.cfg.Delay, goodread.MinDelay, d)
+		a.cfg.Delay = d
 	}
+	if a.cfg.Workers > goodread.MaxWorkers {
+		fmt.Fprintf(os.Stderr, "note: --workers %d exceeds the maximum of %d, using %d\n",
+			a.cfg.Workers, goodread.MaxWorkers, goodread.MaxWorkers)
+		a.cfg.Workers = goodread.MaxWorkers
+	}
+
+	goodread.Version = Version
+	a.client = goodread.NewClient(a.cfg)
 	a.cache = goodread.NewCache(a.cfg)
 	return nil
 }
@@ -201,8 +221,14 @@ func mapFetchErr(err error) error {
 	switch {
 	case err == nil:
 		return nil
+	case errors.Is(err, goodread.ErrDisallowed):
+		return codeError(exitDisallowed, err)
+	case errors.Is(err, goodread.ErrNoRobots):
+		return codeError(exitNoRobots, fmt.Errorf(
+			"%w\nnothing was attempted. there is no fallback copy of the rules, "+
+				"because a stale copy that says yes is worse than no answer", err))
 	case isBlocked(err):
-		return codeError(exitBlocked, fmt.Errorf("%w\nhint: pass --cookies to lend a signed-in session", err))
+		return codeError(exitBlocked, err)
 	case isNotFound(err):
 		return codeError(exitNoData, err)
 	default:
