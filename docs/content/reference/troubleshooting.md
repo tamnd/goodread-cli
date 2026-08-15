@@ -1,84 +1,131 @@
 ---
 title: "Troubleshooting"
-description: "The handful of things that trip people up, and how to fix each one."
+description: "What each exit code means, what to do about it, and the handful of things that trip people up."
 weight: 40
 ---
 
-Most of these come down to network reality, not a bug. Goodreads is a public
-website behind a WAF, and goodread is honest about what it can and cannot read.
+Most of these are network reality or a rule rather than a bug.
+Goodreads is a public website with a `robots.txt` and a WAF, and goodread is honest about what it can and cannot read.
 
-## "blocked" and exit code 5
+Start by asking the tool:
 
-Goodreads sits behind an AWS WAF that intermittently challenges some HTML pages.
-When the page goodread asks for comes back as a challenge, it exits with code 5
-("blocked") rather than returning the challenge as if it were data. This hits the
-commands that read the `/book/show/` page: `book`, `similar`, and `reviews`.
+```bash
+goodread info                                            # resolved config and paths
+goodread robots                                          # the rules, and every surface against them
+goodread robots check https://www.goodreads.com/search   # why one URL refused
+goodread <command> -vv                                   # every request and the extraction ladder
+```
+
+## Exit 7: refused because robots.txt disallows it
+
+The path is on a surface Goodreads' `robots.txt` disallows: the search page, shelves, reviews past the embedded thirty, or `/work/<id>`.
+`goodread robots check <url>` names the rule that decided.
+
+Two of those have a real replacement on an allowed surface.
+Use `goodread lookup` instead of site search and `goodread work` instead of the work page.
+Shelves and the full review set have no replacement, and saying so is more useful than a clever path to the same bytes.
+
+If you have decided it is your call, `--no-robots` reads them anyway.
+It warns once, the pace floor still applies, and on a crawl it needs `--yes` as well.
+See [robots.txt and what it costs](/guides/robots-and-limits/).
+
+## Exit 8: robots.txt could not be read
+
+Nothing was attempted.
+There is no fallback copy of the rules and no bundled default, because a stale copy that says yes is worse than no answer, and no flag turns this into a proceed.
+
+In practice this is a network or DNS problem rather than a Goodreads problem, so check that you can reach `https://www.goodreads.com/robots.txt` at all.
+
+## Exit 4: the site answered, and the answer was an error or a block
+
+Either an HTTP error, or the AWS WAF answering with a challenge instead of a page.
+
+goodread reports a challenge and stops.
+It does not run a browser, solve it, or carry a session cookie in, because a public page that has been gated is one somebody chose to gate.
 
 What to do, in order:
 
-1. **Use the open endpoints when you can.** `search` and `search --books` use the
-   autocomplete JSON endpoint, and `shelf` uses the public RSS feed. Neither is
-   WAF-challenged, so for the fields they carry, prefer them.
-2. **Slow down and retry.** The default `--delay` is already two seconds. A
-   challenge is often transient; the same page frequently succeeds a moment
-   later.
-3. **Lend a session with `--cookies`.** Export a Netscape `cookies.txt` jar from
-   a signed-in browser and pass it:
+1. **Wait and retry.**
+   A challenge is often transient, and the same page frequently succeeds later.
+2. **Slow down.**
+   Raise `--delay`.
+   The default is two seconds and there is nothing wrong with five.
+3. **Take a different surface.**
+   The route around a block is usually a different page rather than a harder request.
+   `lookup` for search, `editions` for ISBNs, `work` for a work.
 
-   ```bash
-   goodread book 2767052 --cookies ~/cookies.txt
-   ```
+A 429 is handled for you: goodread backs off and retries up to `--retries` times.
+Seeing it often means you are going too fast, so raise `--delay` and let the cache absorb the repeats.
 
-   A real session usually clears the challenge.
+## Exit 3: the site never answered
 
-## The cookies.txt format
+A timeout, a DNS failure, a dropped connection.
+Nothing came back at all, which is different from exit 4 where something did.
+Check the network, then raise `--timeout`.
 
-`--cookies` expects a Netscape cookie jar: the plain-text format most browser
-extensions export and `curl` reads. Each line is tab-separated:
+## Exit 6: not found
 
+goodread reached the page and there was nothing there: a 404, an id that does not exist, a search with no matches.
+
+Check the id first.
+`goodread id <url>` shows how goodread classifies it without spending a request, and a work id used where a book id belongs reads a different book entirely.
+
+## Exit 5: extraction failed, or a record did not reconcile
+
+Either the page came back and nothing on it matched, or the numbers did not add up.
+
+`goodread book <id> --check` derives the mean from the five star buckets and compares it against the published average, which is the check that catches a reversed distribution.
+
+If a page you know exists stops parsing, the likeliest cause is a redesign moving a selector.
+`goodread extraction` shows which rung answers for each surface and how many selectors are in play, and `goodread verify` checks the extractor against the pinned captures:
+
+```bash
+goodread verify
+goodread verify --strict
+goodread verify --sample 5
 ```
-www.goodreads.com	FALSE	/	TRUE	0	session_id	abc123...
-```
 
-Lines starting with `#` are comments. Export it from a browser where you are
-signed in to Goodreads, save it somewhere private, and pass its path to
-`--cookies`. goodread only replays the jar; it never logs in for you and never
-stores credentials.
+`--sample` reads that many live book pages instead of the captures.
+Please keep the number small.
 
-## "no data" and exit code 3
+## Exit 2: usage
 
-Exit code 3 means goodread reached the page but found nothing to return: a 404,
-an empty shelf, a search with no matches. Check the id or URL is right (use
-`goodread id <url>` to see how goodread classifies it), try a broader search, or
-confirm the shelf actually has books on it.
+A bad flag, a missing argument, or a config file that will not parse.
+A config file that is present and broken is an error rather than a shrug, because the alternative is running with settings you think you changed.
 
-## Rate limiting (429)
+`no_robots` in the config file is a deliberate error with a message saying to pass the flag instead.
 
-If Goodreads returns 429 (too many requests), goodread backs off and retries up
-to `--retries` times. If you see this often, you are going too fast: raise
-`--delay`, lower `--workers`, and let the cache absorb repeat fetches. The
-defaults (two second delay, two workers) are set to avoid this.
+## Exit 1: something else
 
-## A crawl reports failures (exit code 4)
+Nothing above classified it.
+A run that exits 4 is telling you something true about the site and a run that exits 1 is telling you we do not know, which is why it stays a separate code.
+Re-run with `-vv` and open an issue with what it printed.
 
-`crawl` exits 4 when it processed some URLs but others failed (often a WAF
-challenge on a `/book/show/` page in the queue). The records that did parse are
-in the store; re-run `crawl` later to retry the queue, or pass `--cookies` for
-the challenged ones. Exit 3 from `crawl` means nothing was processed at all (an
-empty queue).
+## A crawl reported failures
 
-## Where state lives
+A run where every page failed exits non-zero.
+A run that lost three of four hundred does not, because that is a normal crawl.
 
-The on-disk cache and the SQLite store both live under the data dir (the XDG
-data directory by default, or `GOODREAD_DATA_DIR` / `--data-dir`). The store
-file alone can be moved with `--store`. To see the resolved paths:
+The summary prints up to five failures with the reason recorded for each.
+The frontier lives in the store, so running the same command again retries what is left and serves what already succeeded out of the cache.
+
+## Nothing in the store
+
+`find`, `query`, `graph` and `export` read the local store and never make a request, so an empty result means nothing has been crawled into it yet, or `--store` is pointing somewhere else.
 
 ```bash
 goodread info
+goodread query --tables
+goodread db info
 ```
 
-To clear the cache and start fresh:
+## Where state lives
+
+The page cache and the SQLite store both live under the data dir, which is the XDG data directory by default and moves with `--data-dir` or `GOODREAD_DATA_DIR`.
+The store file alone moves with `--store`.
 
 ```bash
-goodread cache clear
+goodread info          # the resolved paths
+goodread cache info    # location, file count, size
+goodread cache clear   # start fresh
 ```

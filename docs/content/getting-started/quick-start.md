@@ -1,69 +1,85 @@
 ---
 title: "Quick start"
-description: "From an empty terminal to a real search result, a real shelf, and a real record, in a handful of commands."
+description: "From an empty terminal to a real book, a real work, a real edition list and a local graph you can query, in a handful of commands."
 weight: 30
 ---
 
-This walks the core loop: search the catalog, read a shelf, and look up a record
-by id. The first two commands hit the open endpoints (autocomplete and RSS), so
-they are quick and reliable. The third reads a `/book/show/` page, which is the
-one the WAF sometimes challenges.
+This walks the core loop: read a book, read the work behind it, list its editions, build a small local store and query it offline.
+Everything here is on a surface `robots.txt` allows, so nothing needs a flag.
 
-## 1. Search the catalog
-
-```bash
-goodread search "the hunger games" -n 10
-```
-
-Each row is a book or an author from the autocomplete endpoint. Want rich book
-records instead of the thin autocomplete rows? Add `--books`:
-
-```bash
-goodread search dune --books --format json
-```
-
-`search` is the reliable starting point because the autocomplete endpoint is
-open and not WAF-challenged.
-
-## 2. Read a shelf
-
-```bash
-goodread shelf 1 --shelf read
-```
-
-Each row is a book on that reader's shelf, with its rating, review, ISBN, and
-the dates it was added and read. By default `shelf` reads the public RSS feed,
-which is rich and not challenged. Pass `--html` to walk the paginated HTML shelf
-instead when you want more than the feed carries:
-
-```bash
-goodread shelf 1 --shelf read --html --max-pages 3
-```
-
-## 3. Look up a record by id
-
-`book` takes an id or a full URL and fetches the book page:
+## 1. Read a book
 
 ```bash
 goodread book 2767052
 ```
 
-That is "The Hunger Games". The same record as JSON:
+```
+The Hunger Games (The Hunger Games, #1)
+by Suzanne Collins
 
-```bash
-goodread book 2767052 --format json
+id          2767052
+work        2792775
+series      The Hunger Games #1
+published   2008-10-14
+publisher   Scholastic Press
+format      Hardcover
+pages       374
+language    English
+isbn13      9780439023481
+url         https://www.goodreads.com/book/show/2767052-the-hunger-games
+
+4.35 average from 10,233,344 ratings, 275,272 text reviews
 ```
 
-`book` reads the `/book/show/` HTML page, which is the page the AWS WAF
-sometimes challenges. If you see exit code 5 ("blocked"), the page was
-challenged this time. Slow down, try again, or pass a signed-in session with
-`--cookies` (see [troubleshooting](/reference/troubleshooting/)). The open
-`search` and `shelf` endpoints above are not affected.
+`book` takes a bare id, a full URL, or several at once.
+The same record as JSON:
 
-## 4. Classify without fetching
+```bash
+goodread book 2767052 --json
+```
 
-`id` turns a URL or id into an (entity, id) pair without touching the network,
-which is handy in scripts:
+That JSON carries more than the table shows: `surfaces` says which pages it was read from, `via` and `level` say which rung of the extraction ladder answered for each field, and `missed` is a list of plain sentences about what this page did not carry.
+
+## 2. Read the work behind it
+
+The book above is one printing.
+The work is the thing Suzanne Collins wrote:
+
+```bash
+goodread work 2792775
+```
+
+`/work/<id>` is disallowed by `robots.txt`, so `work` reads the editions page and then the first edition's own page, which carries the work with its places, characters and awards.
+That costs two requests, and the record says which edition it came through.
+
+## 3. List the editions
+
+```bash
+goodread editions 2792775
+```
+
+One row per printing, and this is where the ISBNs are.
+A work does not have an ISBN and a book has only its own, so if you want them all, this is the command.
+Pages are explicit:
+
+```bash
+goodread editions 2792775 --page 2 --pages 3
+```
+
+## 4. Resolve an identifier
+
+If what you have is an ISBN rather than an id:
+
+```bash
+goodread lookup 9780439023481
+goodread lookup "the hunger games"
+```
+
+`lookup` goes through the open autocomplete route, which needs no key and is allowed.
+
+## 5. Classify without fetching
+
+`id` turns a URL or id into an (entity, id) pair without touching the network, which is handy in scripts:
 
 ```bash
 goodread id https://www.goodreads.com/book/show/2767052
@@ -73,28 +89,52 @@ goodread id https://www.goodreads.com/book/show/2767052
 book	2767052
 ```
 
-## 5. Compose
+## 6. Build a small store and query it
 
-Output that pipes is the point. Pull the cover URLs off a shelf:
+Everything read can be folded into a local SQLite graph.
+Look before you leap:
 
 ```bash
-goodread shelf 1 --shelf read --format jsonl | jq -r .cover_url
+goodread crawl --seed gr:author/153394 --depth 1 --dry-run
 ```
 
-Count the books an author has:
+`--dry-run` prints the plan and reads nothing, which is how you find out a crawl is twelve hours before starting it.
+Drop the flag to run it:
 
 ```bash
-goodread author 153394 --fields name,books_count
+goodread crawl --seed gr:author/153394 --depth 1
+```
+
+Then work offline:
+
+```bash
+goodread find hunger
+goodread graph gr:book/2767052 --depth 2
+goodread query "select title, isbn13, num_pages from books order by num_pages desc limit 5"
+goodread export --to jsonl > books.jsonl
+```
+
+An interrupted crawl continues where it stopped when you run the same command again, because the frontier lives in the store.
+
+## 7. Compose
+
+Output that pipes is the point.
+The default is a table on a terminal and JSONL when piped, so the same command reads well by hand and parses cleanly in a pipe:
+
+```bash
+goodread editions 2792775 | jq -r .isbn13
+goodread book 2767052 --fields title,isbn13,num_pages -f tsv
+goodread book 2767052 --template '{{.Book.Title}} isbn {{.Book.ISBN13}}'
 ```
 
 ## Where to next
 
-You have the core loop. From here:
+You have the core loop.
+From here:
 
-- [Books and authors](/guides/books-and-authors/) covers `book`, `author`,
-  `series`, `similar`, and `reviews`, and the WAF caveat.
-- [Search and discovery](/guides/search-and-discovery/) goes deep on `search`,
-  `genre`, `list`, and the `id` classifier.
-- [Shelves and quotes](/guides/shelves-and-quotes/) covers `shelf`, `quote`, and
-  `user`.
+- [Books, works and editions](/guides/books-and-works/) covers the whole read side and the difference the tool is built on.
+- [The store and the graph](/guides/store-and-graph/) covers `find`, `query`, `graph` and `export`.
+- [Crawling](/guides/crawling/) covers seeds, the frontier, resuming and the sitemap.
+- [robots.txt and what it costs](/guides/robots-and-limits/) covers the disallowed surfaces and `--no-robots`.
+- [Output formats](/guides/output-formats/) covers formats, fields, templates and exit codes.
 - The [CLI reference](/reference/cli/) lists every command and flag.

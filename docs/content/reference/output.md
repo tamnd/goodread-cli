@@ -1,23 +1,22 @@
 ---
 title: "Output formats"
-description: "Every output format, how to narrow fields, and how to template records."
+description: "Every output format, what the JSON carries, how to narrow fields, and how to template records."
 weight: 30
 ---
 
-Every command that emits records renders through the same formatter. Pick a
-format with `--format` (or `-f`), or let goodread choose: a table when writing to
-a terminal, JSONL when piped.
+Every command that emits records renders through the same formatter.
+Pick a format with `--format` (or `-f`), or let goodread choose: a table when writing to a terminal, JSONL when piped.
 
 ## Formats
 
 ```bash
-goodread search dune -f table   # aligned columns for reading
-goodread search dune -f jsonl   # one JSON object per line, for piping
-goodread search dune -f json    # a single JSON array
-goodread search dune -f csv     # spreadsheet friendly
-goodread search dune -f tsv     # tab-separated
-goodread search dune -f url     # just the Goodreads URL of each row
-goodread search dune -f raw     # the underlying bytes, unformatted
+goodread editions 2792775 -f table   # aligned columns for reading
+goodread editions 2792775 -f jsonl   # one JSON object per line, for piping
+goodread editions 2792775 -f json    # a single JSON array
+goodread editions 2792775 -f csv     # spreadsheet friendly
+goodread editions 2792775 -f tsv     # tab-separated
+goodread editions 2792775 -f url     # just the Goodreads URL of each row
+goodread editions 2792775 -f raw     # the underlying bytes, unformatted
 ```
 
 | Format | Best for |
@@ -29,41 +28,73 @@ goodread search dune -f raw     # the underlying bytes, unformatted
 | `url` | Feeding URLs into other commands |
 | `raw` | The unformatted bytes |
 
+`--json` is shorthand for `-f json`.
+
+RDF is not here because it is not a per-record shape.
+It comes out of the store: `goodread export --to rdf`.
+
+## The envelope
+
+Every record carries provenance, and the JSON formats show all of it.
+
+| Field | What it says |
+|---|---|
+| `kind` | Which node kind this is |
+| `surfaces` | Which pages the record was built from, as `s1`, `s6` and so on |
+| `sources` | What those pages carried, like "Next.js, Apollo cache inline" |
+| `retrieved_at` | When it was read |
+| `build_id` | Which deployment of the site answered |
+| `via` | Which surface each field came from |
+| `level` | Which rung of the ladder answered for each field |
+| `missed` | Plain sentences about what the page did not carry |
+
+The levels are `1` for the `__NEXT_DATA__` Apollo cache, `2` for `application/ld+json` and `og:` tags, and `3` for a CSS selector over the rendered HTML.
+
+A field the read did not find is absent, not zero.
+A missing `num_pages` means nobody knows, rather than zero pages.
+
+Every `stats` block also carries its own `via`, which is never omitted, because a book page publishes one edition's readers and a work read publishes all of them and the field names are the same either way.
+
 ## Narrowing fields
 
-Keep only the fields you want:
-
 ```bash
-goodread book 2767052 --fields title,avg_rating,ratings_count
+goodread book 2767052 --fields title,isbn13,num_pages -f tsv
+goodread editions 2792775 --fields isbn13,format,publisher -f csv
 ```
 
-`--no-header` drops the header row in `table` and `csv` output, which is handy
-when a downstream tool expects bare rows.
+`--fields` names the JSON keys.
+`--no-header` drops the header row in table, csv and tsv output.
 
 ## Templating records
 
-For full control over each line, apply a Go text/template. The fields are the
-record's keys:
+A Go text/template applied per record.
+It walks the Go struct rather than the JSON, so the field names are the Go names:
 
 ```bash
-goodread book 2767052 --template '{{.title}} by {{.author_name}}'
-goodread shelf 1 --shelf read --template '{{.title}}	{{.rating}}'
+goodread book 2767052 --template '{{.Book.Title}} isbn {{.Book.ISBN13}}'
 ```
+
+So `--fields isbn13` and `--template '{{.Book.ISBN13}}'` reach the same field by different routes.
 
 ## Why auto-detection helps
 
-Because the default adapts to the destination, the same command reads well by
-hand and parses cleanly in a pipe:
+Because the default adapts to the destination, the same command reads well by hand and parses cleanly in a pipe:
 
 ```bash
-goodread shelf 1 --shelf read                  # a table, because this is a terminal
-goodread shelf 1 --shelf read | jq -r .title   # JSONL, because this is a pipe
+goodread editions 2792775                    # a table, because this is a terminal
+goodread editions 2792775 | jq -r .isbn13    # JSONL, because this is a pipe
 ```
 
 You only reach for `--format` when you want something other than that default.
 
 ## Color
 
-`--color` is `auto` by default: goodread colors table output on a terminal and
-drops color when piped. Force it with `--color always` or turn it off with
-`--color never`.
+`--color` is `auto` by default: goodread colors table output on a terminal and drops color when piped.
+Force it with `--color always` or turn it off with `--color never`.
+
+## Verbosity
+
+`-v` says what is being read and what was not.
+`-vv` adds every request and the extraction ladder.
+Both go to stderr, so piping the output stays clean.
+`-q` suppresses progress entirely.
