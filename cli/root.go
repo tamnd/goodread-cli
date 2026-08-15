@@ -140,6 +140,8 @@ func NewRootCmd() *cobra.Command {
 		app.openCmd(),
 		app.cacheCmd(),
 		app.robotsCmd(),
+		app.extractionCmd(),
+		app.verifyCmd(),
 		app.infoCmd(),
 		app.versionCmd(),
 	)
