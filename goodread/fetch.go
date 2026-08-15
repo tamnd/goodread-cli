@@ -169,15 +169,22 @@ func (c *Client) SearchBooks(ctx context.Context, query string, limit int) ([]Sc
 	return books, nil
 }
 
-// Search runs autocomplete first (fast, JSON) and falls back to HTML search.
+// Search reads /book/auto_complete and stops there.
+//
+// v0.2.0 fell through to the HTML search page when autocomplete came back
+// empty, which robots.txt disallows. So a query with no hits turned into a
+// disallowed request, and the fallback fired exactly when it was least useful.
+// No hits is now no hits, and `goodread search --deep --no-robots` is the
+// explicit route to the search page.
 func (c *Client) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	body, code, err := c.Fetch(ctx, SearchAutocompleteURL(query))
-	if err == nil && code == 200 {
-		if res := ParseSearchAutocomplete(body); len(res) > 0 {
-			return trimResults(res, limit), nil
-		}
+	if err != nil {
+		return nil, err
 	}
-	return c.SearchHTML(ctx, query, limit)
+	if code != 200 {
+		return nil, fmt.Errorf("autocomplete HTTP %d", code)
+	}
+	return trimResults(ParseSearchAutocomplete(body), limit), nil
 }
 
 // SearchHTML walks the full HTML search results, following pagination until

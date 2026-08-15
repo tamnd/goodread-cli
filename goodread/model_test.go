@@ -283,9 +283,9 @@ func TestWorkCarriesTheCuratedLists(t *testing.T) {
 func TestFourStatesOfAMissingField(t *testing.T) {
 	t.Run("the surface was not read", func(t *testing.T) {
 		b := bookFromCapture(t, "book_show_2767052.html.gz")
-		if len(b.Reviews) != 0 {
-			t.Fatal("this row needs a field the book page does not read")
-		}
+		// Quotes and not reviews. Reviews used to be the example here and are
+		// now read from the page cache, which is the outcome this row is meant
+		// to be the opposite of.
 		if _, ok := b.Via["quotes"]; ok {
 			t.Error("quotes has a via entry and the book page never read the quotes surface")
 		}

@@ -27,12 +27,16 @@ type App struct {
 
 	// global flags
 	format   string
+	json     bool
 	fields   []string
 	noHeader bool
 	template string
 	color    string
 	limit    int
 	quiet    bool
+	verbose  int
+	depth    goodread.Depth
+	depthArg string
 }
 
 // exit codes.
@@ -97,12 +101,15 @@ func NewRootCmd() *cobra.Command {
 
 	pf := root.PersistentFlags()
 	pf.StringVarP(&app.format, "format", "f", "", "output: table|json|jsonl|csv|tsv|url|raw (default: table on a TTY, jsonl when piped)")
+	pf.BoolVar(&app.json, "json", false, "shorthand for --format json")
 	pf.StringSliceVar(&app.fields, "fields", nil, "comma-separated columns to include")
 	pf.BoolVar(&app.noHeader, "no-header", false, "omit the header row in table/csv/tsv")
 	pf.StringVar(&app.template, "template", "", "Go text/template applied per record")
 	pf.StringVar(&app.color, "color", "auto", "color: auto|always|never")
 	pf.IntVarP(&app.limit, "limit", "n", 0, "limit number of results (0 = no limit)")
 	pf.BoolVarP(&app.quiet, "quiet", "q", false, "suppress progress on stderr")
+	pf.CountVarP(&app.verbose, "verbose", "v", "explain what is being read. -vv adds every request and the extraction ladder")
+	pf.StringVar(&app.depthArg, "depth", string(goodread.DepthMeta), "how much to read: "+depthList())
 
 	pf.IntVar(&app.cfg.Workers, "workers", goodread.DefaultWorkers, "concurrent workers for bulk/crawl")
 	pf.DurationVar(&app.cfg.Delay, "delay", goodread.DefaultDelay, "minimum spacing between requests")
@@ -131,6 +138,8 @@ func NewRootCmd() *cobra.Command {
 		app.shelfCmd(),
 		app.genreCmd(),
 		app.searchCmd(),
+		app.lookupCmd(),
+		app.findCmd(),
 		app.reviewsCmd(),
 		app.similarCmd(),
 		app.idCmd(),
@@ -150,6 +159,9 @@ func NewRootCmd() *cobra.Command {
 
 // setup resolves output defaults and constructs the shared client/cache.
 func (a *App) setup(cmd *cobra.Command) error {
+	if a.json {
+		a.format = string(FormatJSON)
+	}
 	if a.format == "" {
 		if isatty.IsTerminal(os.Stdout.Fd()) {
 			a.format = string(FormatTable)
@@ -169,6 +181,12 @@ func (a *App) setup(cmd *cobra.Command) error {
 			a.cfg.Workers, goodread.MaxWorkers, goodread.MaxWorkers)
 		a.cfg.Workers = goodread.MaxWorkers
 	}
+
+	d, ok := goodread.ParseDepth(a.depthArg)
+	if !ok {
+		return codeError(exitUsage, fmt.Errorf("unknown depth %q, want one of %s", a.depthArg, depthList()))
+	}
+	a.depth = d
 
 	goodread.Version = Version
 	a.client = goodread.NewClient(a.cfg)
@@ -208,6 +226,17 @@ func (a *App) renderOrEmpty(records any, n int) error {
 		return codeError(exitNoData, nil)
 	}
 	return nil
+}
+
+// verbosef prints an explanation at or above a verbosity level.
+//
+// -v says what is being read and what was not. -vv adds every request and the
+// extraction ladder. Both go to stderr, so piping the output stays clean.
+func (a *App) verbosef(level int, format string, args ...any) {
+	if a.verbose < level || a.quiet {
+		return
+	}
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 
 // progressf prints a progress line to stderr unless --quiet.

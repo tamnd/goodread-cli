@@ -117,10 +117,29 @@ func (f FieldKey) String() string {
 // the thing later, and "this exists and we did not read it" is a more useful
 // record than either a silent omission or a failure.
 type Ref struct {
-	Type     string `json:"type"`
-	ID       string `json:"id"`
-	Key      string `json:"key"`
-	Resolved bool   `json:"resolved"`
+	Type string `json:"type"`
+	ID   string `json:"id"`
+	Key  string `json:"key"`
+
+	// Title is whatever the referring page knew this thing was called.
+	//
+	// Optional, and worth carrying when it is there. A reference to a series
+	// with no name is an id somebody has to spend a request to make sense of,
+	// and the page that pointed at it usually already said the name.
+	Title string `json:"title,omitempty"`
+
+	Resolved bool `json:"resolved"`
+}
+
+// Label is the best short name for a reference.
+//
+// The id when there is nothing better, because a reference that prints as
+// nothing is worse than one that prints as a number somebody can look up.
+func (r Ref) Label() string {
+	if r.Title != "" {
+		return r.Title
+	}
+	return r.ID
 }
 
 // SplitCacheKey splits an Apollo cache key into its type and id.

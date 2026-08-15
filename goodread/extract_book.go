@@ -96,6 +96,7 @@ func (e *Extractor) fromApollo(cache Apollo) {
 	}
 
 	e.set("extra", LevelNextData, e.extraFrom(book, "Book", bookKnown))
+	e.reviewsFrom(cache)
 }
 
 // bookKnown is every field on the Book entity the model has a home for.
@@ -332,9 +333,6 @@ func (e *Extractor) workFrom(cache Apollo, book map[string]json.RawMessage) {
 				e.Miss("the book page carries %d %s of the work's set.", n, plural(fk.Name, n))
 			}
 		}
-	}
-	if n, ok := e.Fields["text_reviews_count"].(int); ok && n > 0 {
-		e.Miss("the book page samples the reviews. it carries the page's sample of %d text reviews.", n)
 	}
 }
 

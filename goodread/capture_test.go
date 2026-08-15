@@ -125,8 +125,16 @@ func TestCapturesOpen(t *testing.T) {
 		if len(body) < 1024 {
 			t.Errorf("%s is %d bytes, which is too small to be a real page", c.File, len(body))
 		}
-		if !strings.Contains(strings.ToLower(string(body[:min(2048, len(body))])), "<html") {
-			t.Errorf("%s does not look like HTML", c.File)
+		head := strings.ToLower(string(body[:min(2048, len(body))]))
+		// Not every surface answers with a document. /book/reviews replies with
+		// a JavaScript call carrying escaped markup, so the .js captures get
+		// checked for that shape instead of for a doctype.
+		want := "<html"
+		if strings.HasSuffix(c.File, ".js.gz") {
+			want = "element.update("
+		}
+		if !strings.Contains(head, want) {
+			t.Errorf("%s does not contain %q, so it is not the response it claims to be", c.File, want)
 		}
 	}
 }

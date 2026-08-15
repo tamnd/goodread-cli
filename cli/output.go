@@ -258,6 +258,24 @@ func jsonKey(f reflect.StructField) string {
 
 func formatValue(v reflect.Value) string {
 	switch v.Kind() {
+	// The v0.3.0 model uses pointers for every number that has a meaningful
+	// absence, so a renderer that does not follow them prints memory addresses
+	// where the ratings used to be. A nil one is an empty cell, which is the
+	// whole point of it being a pointer.
+	case reflect.Pointer, reflect.Interface:
+		if v.IsNil() {
+			return ""
+		}
+		return formatValue(v.Elem())
+	case reflect.Map:
+		if v.Len() == 0 {
+			return ""
+		}
+		b, err := json.Marshal(v.Interface())
+		if err != nil {
+			return ""
+		}
+		return string(b)
 	case reflect.String:
 		return v.String()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -280,6 +298,11 @@ func formatValue(v reflect.Value) string {
 				return ""
 			}
 			return t.Format(time.RFC3339)
+		}
+		// A nested record in a flat cell is JSON or it is a Go dump, and JSON is
+		// the one a person can do something with.
+		if b, err := json.Marshal(v.Interface()); err == nil {
+			return string(b)
 		}
 	}
 	return fmt.Sprintf("%v", v.Interface())
