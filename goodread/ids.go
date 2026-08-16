@@ -126,11 +126,27 @@ func SearchAutocompleteURL(q string) string {
 
 // SearchHTMLURL builds the full HTML search URL for a page.
 func SearchHTMLURL(q string, page int) string {
+	return SearchURL(SearchQuery{Query: q, Page: page})
+}
+
+// SearchURL builds the search page URL for a whole query.
+//
+// search[source] is always set, because the site's own tab links set it and a
+// request that leaves it off is not the request a browser would have made.
+// search[field] is only set when it narrows something, since the site treats
+// missing and all as the same thing and the shorter URL is the one that
+// matches what the tabs link to.
+func SearchURL(sq SearchQuery) string {
+	sq = sq.Norm()
 	v := url.Values{}
-	v.Set("q", q)
-	v.Set("search_type", "books")
-	if page > 1 {
-		v.Set("page", itoa(page))
+	v.Set("q", sq.Query)
+	v.Set("search[source]", sq.Source)
+	if sq.Field != "" && sq.Field != "all" {
+		v.Set("search[field]", sq.Field)
+	}
+	v.Set("search_type", sq.Type)
+	if sq.Page > 1 {
+		v.Set("page", itoa(sq.Page))
 	}
 	return BaseURL + "/search?" + v.Encode()
 }

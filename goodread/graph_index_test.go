@@ -242,3 +242,74 @@ func TestBothIDSpacesSurviveTheRoundTrip(t *testing.T) {
 		t.Error("the uri is not the legacy id")
 	}
 }
+
+// TestIndexSearchRecordFoldsItsRows is the acceptance line 3008 writes down: a
+// search read folds into the store as books, authors and works with
+// contributed_by and edition_of.
+//
+// The suggest endpoint is the one worth holding with a test, because it is the
+// only surface that hands over a book id and its work id in the same response.
+// If that stopped folding, the graph would quietly lose the cheapest edition_of
+// it has and nothing else would complain.
+func TestIndexSearchRecordFoldsItsRows(t *testing.T) {
+	body := readCapture(t, "book_auto_complete_hunger_games.json.gz")
+	e, err := ExtractSuggest(body, SearchAutocompleteURL("hunger games"), "hunger games")
+	if err != nil {
+		t.Fatalf("ExtractSuggest: %v", err)
+	}
+	rec, err := SuggestFrom(e, SearchQuery{Query: "hunger games"}, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("SuggestFrom: %v", err)
+	}
+	if len(rec.Results) == 0 {
+		t.Fatal("the capture parsed with no rows, so this test proves nothing")
+	}
+
+	s := testStore(t)
+	if err := s.Put("search", rec.Query, rec.WebURL, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, h := range rec.Results {
+		bu := NodeURI("book", h.Book.ID)
+		if _, err := s.GetNode("book", bu); err != nil {
+			t.Fatalf("row %q is not a book node: %v", h.Title, err)
+		}
+		out, err := s.Edges(bu, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var toWork, byAuthor bool
+		for _, ed := range out {
+			switch ed.Predicate {
+			case EdgeEditionOf:
+				if h.Work != nil && ed.Dst == NodeURI("work", h.Work.ID) {
+					toWork = true
+				}
+			case EdgeContributed:
+				byAuthor = true
+			}
+		}
+		if h.Work != nil && !toWork {
+			t.Errorf("%q names work %s and there is no edition_of edge: %+v", h.Title, h.Work.ID, out)
+		}
+		if len(h.Contributors) > 0 && !byAuthor {
+			t.Errorf("%q was written by %s and there is no contributed_by edge", h.Title, h.Contributors[0].Name)
+		}
+	}
+
+	// The work and the author land as nodes of their own, which is what makes
+	// them reachable without another request.
+	first := rec.Results[0]
+	if first.Work != nil {
+		if _, err := s.GetNode("work", NodeURI("work", first.Work.ID)); err != nil {
+			t.Errorf("the work named on the row is not a node: %v", err)
+		}
+	}
+	if len(first.Contributors) > 0 {
+		au := NodeURI("author", strconv.FormatInt(first.Contributors[0].LegacyID, 10))
+		if _, err := s.GetNode("author", au); err != nil {
+			t.Errorf("the author named on the row is not a node: %v", err)
+		}
+	}
+}

@@ -93,14 +93,16 @@ var Ops = []Op{
 	}},
 
 	// Disallowed from here down.
+	// The args are query, page, search_type and field, in that order. The last
+	// two are optional and default to a books search over every field, which is
+	// what the site does with them missing.
 	{Surface: "s10", Name: "search", Disallowed: true, Alt: "suggest", Path: func(a ...string) string {
-		v := url.Values{}
-		v.Set("q", arg(a, 0))
-		v.Set("search_type", "books")
-		if p := arg(a, 1); p != "" && p != "1" {
-			v.Set("page", p)
+		page := 0
+		if p := arg(a, 1); p != "" {
+			page = int(commaFreeInt(p))
 		}
-		return "/search?" + v.Encode()
+		q := SearchQuery{Query: arg(a, 0), Page: page, Type: arg(a, 2), Field: arg(a, 3)}
+		return strings.TrimPrefix(SearchURL(q), BaseURL)
 	}},
 	{Surface: "s11", Name: "shelf", Disallowed: true, Path: func(a ...string) string {
 		v := url.Values{}

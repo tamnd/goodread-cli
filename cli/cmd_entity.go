@@ -269,20 +269,31 @@ type idRow struct {
 func (a *App) searchCmd() *cobra.Command {
 	var deep bool
 	var booksMode bool
+	var searchType, field string
+	var pages int
 	cmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search books and authors",
-		Long: "search returns books and authors matching a query. By default it reads\n" +
+		Long: "search returns books matching a query. By default it reads\n" +
 			"/book/auto_complete, which robots.txt allows, needs no key and carries the\n" +
-			"book id, work id, title, author, page count, rating and ratings count.\n\n" +
-			"--books returns those as full book records. --deep reads /search as well,\n" +
-			"which robots.txt disallows, so it needs --no-robots.",
-		Args:    cobra.MinimumNArgs(1),
-		Example: "  goodread search \"the hunger games\" -n 10\n  goodread search dune --books --format json",
+			"book id, work id, title, series, author, page count, rating, ratings count\n" +
+			"and description.\n\n" +
+			"--deep reads /search as well, which robots.txt disallows, so it needs\n" +
+			"--no-robots. That page adds the totals, the published year, the edition\n" +
+			"count, the pagination, the genre the query mapped to and the related\n" +
+			"shelves.\n\n" +
+			"--type picks a tab. Signed out, books answers, people answers with nothing,\n" +
+			"and lists, groups and quotes answer with a challenge this tool reports\n" +
+			"rather than works around.",
+		Args: cobra.MinimumNArgs(1),
+		Example: "  goodread search \"the hunger games\"\n" +
+			"  goodread search dune --deep --no-robots --format json\n" +
+			"  goodread search dune --deep --no-robots --pages 3\n" +
+			"  goodread search \"le guin\" --deep --no-robots --field author",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			q := joinArgs(args)
+			query := joinArgs(args)
 			if booksMode {
-				books, err := a.client.SearchBooks(cmd.Context(), q, a.limit)
+				books, err := a.client.SearchBooks(cmd.Context(), query, a.limit)
 				if err != nil {
 					return mapFetchErr(err)
 				}
@@ -293,29 +304,95 @@ func (a *App) searchCmd() *cobra.Command {
 				}
 				return a.renderOrEmpty(books, len(books))
 			}
+
 			var (
-				res []goodread.SearchResult
+				rec *goodread.SearchRecord
 				err error
 			)
 			if deep {
-				res, err = a.client.SearchHTML(cmd.Context(), q, a.limit)
+				sq := goodread.SearchQuery{Query: query, Type: searchType, Field: field}
+				rec, err = a.client.GetSearchRecord(cmd.Context(), sq, pages)
 			} else {
-				res, err = a.client.Search(cmd.Context(), q, a.limit)
+				if searchType != "" && searchType != goodread.SearchTypeBooks {
+					return codeError(exitUsage, fmt.Errorf(
+						"--type only applies to --deep, since /book/auto_complete answers about books and nothing else"))
+				}
+				rec, err = a.client.GetSuggestRecord(cmd.Context(), query)
 			}
 			if err != nil {
 				return mapFetchErr(err)
 			}
-			return a.renderOrEmpty(res, len(res))
+			a.reportLevels(rec.Envelope)
+			return a.emitSearch(rec)
 		},
 	}
-	cmd.Flags().BoolVar(&booksMode, "books", false, "return rich book records from autocomplete")
+	// --books is the v0.2.0 shape. It keeps working for the scripts that read
+	// it and comes out of the help, because the record it predates carries
+	// everything it carried and more, and advertising both invites somebody to
+	// pick the smaller one.
+	cmd.Flags().BoolVar(&booksMode, "books", false, "deprecated: return the rows as v0.2.0 book records")
+	_ = cmd.Flags().MarkHidden("books")
 	cmd.Flags().BoolVar(&deep, "deep", false, "read /search as well, which needs --no-robots")
+	cmd.Flags().StringVar(&searchType, "type", "", "which tab: books, people, lists, groups, quotes")
+	cmd.Flags().StringVar(&field, "field", "", "narrow the match: all, title, author")
+	cmd.Flags().IntVar(&pages, "pages", 1, "how many pages of /search to walk, at the pace floor")
 	// --html is what v0.2.0 called it. Kept working and kept out of the help,
 	// because renaming a flag and deleting it in the same release is two
 	// breaking changes where one will do.
 	cmd.Flags().BoolVar(&deep, "html", false, "deprecated alias for --deep")
 	_ = cmd.Flags().MarkHidden("html")
 	return cmd
+}
+
+// suggestCmd is the allowed surface under its own name.
+//
+// The same read `search` does by default. It gets a name of its own because
+// "search without --deep" is a description of a flag rather than of a thing,
+// and a script that wants the endpoint that needs no override should be able to
+// ask for it and not have to know that the default happens to be that today.
+func (a *App) suggestCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "suggest <query>",
+		Short: "Read the allowed search endpoint",
+		Long: "suggest reads /book/auto_complete, which robots.txt allows. It is a\n" +
+			"handful of rows, has no total and does not paginate, and it is the only\n" +
+			"surface on the site that hands over a book id and its work id in one\n" +
+			"response.",
+		Args:    cobra.MinimumNArgs(1),
+		Example: "  goodread suggest dune\n  goodread suggest dune --format json",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			rec, err := a.client.GetSuggestRecord(cmd.Context(), joinArgs(args))
+			if err != nil {
+				return mapFetchErr(err)
+			}
+			a.reportLevels(rec.Envelope)
+			return a.emitSearch(rec)
+		},
+	}
+}
+
+// emitSearch stores the record, applies --limit and renders it.
+//
+// --limit trims the rows and nothing else. The totals stay as the site stated
+// them, because ten rows of eight hundred and sixteen is still eight hundred
+// and sixteen results, and a limit that edited the total would be this tool
+// lying about the site.
+func (a *App) emitSearch(rec *goodread.SearchRecord) error {
+	if a.store != nil {
+		_ = a.store.Put("search", rec.Query, rec.WebURL, rec)
+	}
+	n := len(rec.Results)
+	if a.limit > 0 && n > a.limit {
+		rec.Results = rec.Results[:a.limit]
+	}
+	if Format(a.format) == FormatTable {
+		printSearch(os.Stdout, rec)
+		if n == 0 {
+			return codeError(exitNotFound, nil)
+		}
+		return nil
+	}
+	return a.renderOrEmpty(rec, n)
 }
 
 // reviews ───────────────────────────────────────────────────────────────────
@@ -407,11 +484,29 @@ func mergeReviews(cached, paged []goodread.Review) []goodread.Review {
 
 // similar ───────────────────────────────────────────────────────────────────
 
+// similarCmd is named after a page that no longer answers, and says so.
+//
+// /book/similar/<id> was the recommendation surface and it is gone: it replies
+// with an unrelated canonical, so there is nothing to read. The strip the book
+// page renders as "Readers also enjoyed" is not in the anonymous HTML either.
+// What is left is the other books the page links to, which are mostly the rest
+// of the series and whatever the reviews mention, and calling that a
+// recommendation would be this tool inventing a ranking Goodreads did not
+// publish. The command stays because a link list is still useful for crawling;
+// the name stays because renaming it would break scripts for no gain, and the
+// help is where the correction belongs.
 func (a *App) similarCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "similar <book-id|url>",
-		Short: "List books similar to a given book",
-		Args:  cobra.ExactArgs(1),
+		Short: "List the other books a book's page links to",
+		Long: "similar lists the other books linked from a book's page, in the order\n" +
+			"the page links them, capped at twenty.\n\n" +
+			"These are not recommendations and they are not ranked. Goodreads used\n" +
+			"to publish /book/similar/<id> and that page no longer answers, and the\n" +
+			"\"Readers also enjoyed\" strip is not in the HTML an anonymous reader\n" +
+			"gets. What this returns is usually the rest of the series and the books\n" +
+			"mentioned in the reviews on the page.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, id := goodread.Classify(args[0])
 			if id == "" {
@@ -429,6 +524,7 @@ func (a *App) similarCmd() *cobra.Command {
 			for i, sid := range ids {
 				rows[i] = idRow{BookID: sid, URL: goodread.BookURL(sid)}
 			}
+			a.progressf("note: these are the books this page links to, not recommendations. the page that ranked them is gone.")
 			return a.renderOrEmpty(rows, len(rows))
 		},
 	}

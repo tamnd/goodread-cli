@@ -42,6 +42,10 @@ Twelve predicates, and a name outside the set is refused at the write rather tha
 | `reviewed` | user | book | `rating` |
 | `shelved` | user | book | `shelf`, `rating` |
 
+A search read adds no thirteenth predicate.
+Its rows are books, and they land with `contributed_by` to whoever wrote them and `edition_of` to the work they name, which is the same shape a Listopia page or an author page leaves behind.
+That is why reading the allowed suggest endpoint is worth doing even when you were only looking something up: it is the one surface that gives a book id and its work id in one response, so the `edition_of` edge costs nothing.
+
 Two of those carry properties for the same reason: the fact lives on the edge rather than on either end.
 An illustrator is not a different person from an author, they contributed differently, and a novella at position 2.5 is not book 2.
 

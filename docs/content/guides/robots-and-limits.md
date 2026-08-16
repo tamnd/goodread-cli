@@ -38,13 +38,17 @@ A command that would read one of these refuses and exits 7.
 
 Two of the four have a real replacement on an allowed surface, and those are what you should reach for first.
 
-**Instead of site search, use `lookup`.**
+**Instead of site search, use `suggest` or `lookup`.**
 `/book/auto_complete` is allowed, needs no key, and carries enough to resolve an ISBN, an ASIN or a title to a book.
+`suggest` reads it as a search record, `lookup` reads it as a resolver, and both come off the same allowed endpoint.
 
 ```bash
+goodread suggest "hunger games"
 goodread lookup 9780439023481
 goodread lookup "the hunger games"
 ```
+
+What you give up against the search page is the total, the pagination and the filters, and what you get back is a work id per row that the search page only implies.
 
 The `books` table indexes `isbn13` and `asin` for the same reason, since a replacement for search that takes a table scan is not a replacement.
 
@@ -121,3 +125,7 @@ That is not `robots.txt` and it exits 4, not 7.
 goodread reports a challenge and stops.
 It does not run a browser, solve it, or carry a session cookie in.
 Slowing down and trying later is usually enough, and if it is not, the answer is a different surface rather than a harder request.
+
+Three surfaces answer that way every time rather than occasionally: the Listopia, groups and quotes tabs of the search page.
+`goodread search dune --deep --no-robots --type lists` refuses before it spends a request and exits 4, and so do `--type groups` and `--type quotes`.
+`--no-robots` does not help, because it is not a rules question.

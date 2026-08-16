@@ -19,3 +19,6 @@ list_show_1.html.gz	s4	2026-08-15	https://www.goodreads.com/list/show/1	Listopia
 genres_fantasy.html.gz	s5	2026-08-15	https://www.goodreads.com/genres/fantasy	genre page, featured books and related genres
 book_reviews_2767052.js.gz	s12	2026-08-16	https://www.goodreads.com/book/reviews/2767052	the paginated review set, and the one surface that answers with JavaScript rather than HTML
 series_45175.html.gz	s3	2026-08-16	https://www.goodreads.com/series/45175-harry-potter	the one Rails surface that carries its own JSON, in data-react-props rather than __NEXT_DATA__
+book_auto_complete_hunger_games.json.gz	s14	2026-08-16	https://www.goodreads.com/book/auto_complete?format=json&q=hunger+games	the allowed search route, and the only surface that hands over a book id and its work id in one response
+search_books_hunger_games.html.gz	s10	2026-08-16	https://www.goodreads.com/search?q=the+hunger+games&search_type=books	the search page, disallowed, level 3 only, and the richest single page of book rows on the site
+search_people_hunger_games.html.gz	s10	2026-08-16	https://www.goodreads.com/search?q=the+hunger+games&search_type=people	the people tab, which answers 200 with zero rows when signed out, and is the proof that it does

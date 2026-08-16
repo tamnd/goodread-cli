@@ -127,11 +127,15 @@ func TestCapturesOpen(t *testing.T) {
 		}
 		head := strings.ToLower(string(body[:min(2048, len(body))]))
 		// Not every surface answers with a document. /book/reviews replies with
-		// a JavaScript call carrying escaped markup, so the .js captures get
-		// checked for that shape instead of for a doctype.
+		// a JavaScript call carrying escaped markup and /book/auto_complete
+		// replies with a JSON array, so those captures get checked for their
+		// own shape instead of for a doctype.
 		want := "<html"
-		if strings.HasSuffix(c.File, ".js.gz") {
+		switch {
+		case strings.HasSuffix(c.File, ".js.gz"):
 			want = "element.update("
+		case strings.HasSuffix(c.File, ".json.gz"):
+			want = "[{"
 		}
 		if !strings.Contains(head, want) {
 			t.Errorf("%s does not contain %q, so it is not the response it claims to be", c.File, want)

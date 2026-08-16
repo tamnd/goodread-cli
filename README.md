@@ -105,6 +105,10 @@ Four surfaces are disallowed by Goodreads' rules and are not read by default: th
 There is a `--no-robots` flag for a person who has decided it is their call.
 It warns once, the pace floor still applies, and a crawl with it needs `--yes` as well, because a crawl is the one place where an override multiplies.
 
+A rule is one thing and a challenge is another.
+Three of the five search tabs, Listopia, groups and quotes, answer an anonymous reader with an AWS WAF challenge, and this tool reports that and exits 4 rather than trying to satisfy it.
+There is no cookie flag and no browser here, and `--no-robots` does not change that, because a published rule you decide to step over is not the same thing as an access control somebody put in your way.
+
 The MCP server never reads a disallowed surface at all and `--no-robots` has no effect on it.
 The reason is not that the flag is wrong.
 It is that the flag's whole justification is a person deciding it is their call, and a model calling a tool is not that person deciding.
@@ -122,7 +126,9 @@ It is that the flag's whole justification is a person deciding it is their call,
 | `genre <slug>` | A genre, its featured books and its related genres |
 | `list <id>` | A Listopia list and its ranked books |
 | `lookup <isbn\|asin\|title>` | Resolve an identifier to a book, through the open autocomplete route |
-| `search <query>` | Search books and authors |
+| `suggest <query>` | The allowed search endpoint, which also hands over work ids |
+| `search <query>` | Search, autocomplete by default and the search page with `--deep` |
+| `similar <id\|url>` | The other books a book's page links to, which is not a ranking |
 | `find <text>` | Full text search over the local store, offline |
 | `query <sql>` | One read only SQL statement over the local store |
 | `graph <uri>` | Walk the local graph around a node |
