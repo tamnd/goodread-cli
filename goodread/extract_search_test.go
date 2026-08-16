@@ -391,3 +391,59 @@ func containsSubstring(list []string, want string) bool {
 	}
 	return false
 }
+
+// TestSearchWalksPagesTheSitesOwnWay is the multi page read.
+//
+// The second page is the capture with its sub nav and its next link edited, so
+// the walk has something to follow and something to disagree with if it built
+// the URL itself. The assertion that matters is that page two was asked for
+// through the link the first page wrote, qid and all, rather than through a
+// page number this tool appended to the query.
+func TestSearchWalksPagesTheSitesOwnWay(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NoRobots = true
+	cfg.Delay = MinDelay
+
+	first := readCapture(t, "search_books_hunger_games.html.gz")
+	second := []byte(strings.NewReplacer(
+		"Page 1 of about", "Page 2 of about",
+		"page=2", "page=3",
+	).Replace(string(first)))
+
+	var seen []string
+	c, _ := testClient(t, cfg, func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.RequestURI())
+		if r.URL.Query().Get("page") == "2" {
+			_, _ = w.Write(second)
+			return
+		}
+		_, _ = w.Write(first)
+	})
+	c.SetWarnWriter(nil)
+
+	rec, err := c.GetSearchRecord(context.Background(), SearchQuery{Query: "the hunger games"}, 2)
+	if err != nil {
+		t.Fatalf("GetSearchRecord: %v", err)
+	}
+	if len(seen) != 2 {
+		t.Fatalf("requests = %v, want two pages", seen)
+	}
+	if !strings.Contains(seen[1], "page=2") || !strings.Contains(seen[1], "qid=") {
+		t.Errorf("the second request was %q, and the page's own next link carries the qid", seen[1])
+	}
+	if len(rec.PagesWalked) != 2 || rec.PagesWalked[0] != 1 || rec.PagesWalked[1] != 2 {
+		t.Errorf("pages walked = %v, want 1 and 2", rec.PagesWalked)
+	}
+	if len(rec.Results) != 40 {
+		t.Errorf("results = %d, want the rows of both pages", len(rec.Results))
+	}
+	// The page level facts stay as the first page stated them, because they
+	// describe the search rather than the page.
+	if rec.Page != 1 || rec.TotalResults == nil || *rec.TotalResults != 816 {
+		t.Errorf("page = %d, total = %v, want the first page's own account", rec.Page, rec.TotalResults)
+	}
+	// And the next link moves on, so a third page would be asked for correctly.
+	if !strings.Contains(rec.NextPage, "page=3") {
+		t.Errorf("next page = %q, want the link the second page wrote", rec.NextPage)
+	}
+}

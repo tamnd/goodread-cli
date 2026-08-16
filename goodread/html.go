@@ -2,6 +2,7 @@ package goodread
 
 import (
 	"encoding/json"
+	"html"
 	"regexp"
 	"slices"
 	"strconv"
@@ -10,18 +11,23 @@ import (
 
 var reTags = regexp.MustCompile(`<[^>]+>`)
 
-// cleanHTML strips tags and unescapes the common HTML entities.
+// reBreak is the tags that are a line break rather than nothing.
+//
+// Stripping a <br/> to the empty string runs the sentence before it into the
+// sentence after it, which is how a description ends up reading ". . . .In the
+// ruins of a place once known as North America". A break is whitespace, so it
+// comes out as whitespace.
+var reBreak = regexp.MustCompile(`(?i)<br\s*/?>|</p>|</div>|</li>`)
+
+// cleanHTML strips tags and unescapes the HTML entities.
+//
+// The entity table is the standard library's rather than a handful written out
+// here, because Goodreads emits &apos; and &#x27; and &hellip; among others and
+// a partial table leaves those in the text looking like markup that leaked.
 func cleanHTML(s string) string {
+	s = reBreak.ReplaceAllString(s, "\n")
 	s = reTags.ReplaceAllString(s, "")
-	r := strings.NewReplacer(
-		"&amp;", "&",
-		"&lt;", "<",
-		"&gt;", ">",
-		"&quot;", `"`,
-		"&#39;", "'",
-		"&nbsp;", " ",
-	)
-	return strings.TrimSpace(r.Replace(s))
+	return strings.TrimSpace(html.UnescapeString(s))
 }
 
 var reWS = regexp.MustCompile(`\s+`)

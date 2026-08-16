@@ -312,7 +312,10 @@ func propsOrNil(m map[string]any) any {
 // gains the rest rather than being overwritten by it.
 func (s *Store) indexCards(uri string, m map[string]any) {
 	surface, at := surfaceOf(m), retrievedAt(m)
-	for _, key := range []string{"books", "editions"} {
+	// results is a search record's rows, which are the same BookCard shape the
+	// listing pages carry. A search read that did not fold into the graph would
+	// be the one read that finds books and forgets them.
+	for _, key := range []string{"books", "editions", "results"} {
 		for i, c := range keyMaps(m, key) {
 			ref, _ := c["book"].(map[string]any)
 			bu := uriOf("book", "", ref)
@@ -352,6 +355,21 @@ func (s *Store) indexCards(uri string, m map[string]any) {
 			case strings.HasPrefix(uri, "gr:work/"):
 				_ = s.PutEdge(bu, EdgeEditionOf, uri, nil, surface, at)
 			}
+
+			// The row's own work reference, which the listing pages give away
+			// in the editions link and the suggest endpoint gives away outright.
+			// Getting from an edition to its work normally costs a request, so
+			// a row that hands it over and is not folded here is a request
+			// thrown away.
+			if wref, ok := c["work"].(map[string]any); ok {
+				if wu := uriOf("work", "", wref); wu != "" && wu != bu {
+					_ = s.PutEdge(bu, EdgeEditionOf, wu, nil, surface, at)
+					_ = s.PutNode(Node{URI: wu, Kind: "work",
+						LegacyID: int64(keyNum(wref, "legacy_id")), Title: keyStr(wref, "title"),
+						JSON:     mustJSON(map[string]any{"kind": "work", "title": keyStr(wref, "title")}),
+						Surfaces: []string{surface}, RetrievedAt: at})
+				}
+			}
 			for _, con := range keyMaps(c, "contributors") {
 				if au := uriOf("author", "", con); au != "" {
 					var props any
@@ -359,6 +377,16 @@ func (s *Store) indexCards(uri string, m map[string]any) {
 						props = map[string]string{"role": role}
 					}
 					_ = s.PutEdge(bu, EdgeContributed, au, props, surface, at)
+					// The author lands as a node too, with the name the row
+					// gave. An edge to a node nobody wrote is a join that finds
+					// nothing, and every listing row carries the name already.
+					_ = s.PutNode(Node{
+						URI: au, Kind: "author", LegacyID: legacyOf(con),
+						Title:    keyStr(con, "name"),
+						JSON:     mustJSON(map[string]any{"kind": "author", "legacy_id": legacyOf(con), "name": keyStr(con, "name"), "web_url": keyStr(con, "web_url"), "surfaces": []string{surface}}),
+						Surfaces: []string{surface}, RetrievedAt: at,
+						AuthorName: keyStr(con, "name"),
+					})
 				}
 			}
 		}

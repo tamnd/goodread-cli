@@ -128,13 +128,29 @@ This is the allowed replacement for site search.
 |---|---|
 | `--ids` | Print the matching ids and stop, without reading the book pages |
 
+### suggest
+
+```
+goodread suggest <query>
+```
+
+Read `/book/auto_complete`, which `robots.txt` allows, into a search record.
+
+It is a handful of rows, it publishes no total and it does not paginate, and the record says so rather than looking like it returned everything.
+It is also the only surface on the site that hands over a book id and its work id in the same response, which makes it the cheapest `edition_of` edge there is.
+Every row carries the title with and without its series, the cover, the author with their profile and their works list, the average rating, the ratings count, the page count, the description with and without markup, and the tracking the endpoint attaches to its own links.
+
 ### similar
 
 ```
 goodread similar <book-id|url>
 ```
 
-The books Goodreads lists as similar to the one you name.
+The other books a book's page links to, in the order the page links them, capped at twenty.
+
+These are not recommendations and they are not ranked.
+Goodreads used to publish `/book/similar/<id>` and that page no longer answers, and the "Readers also enjoyed" strip is not in the HTML an anonymous reader gets.
+What comes back is usually the rest of the series and the books the reviews on the page mention.
 
 ## Disallowed by robots.txt
 
@@ -147,13 +163,27 @@ See [robots.txt and what it costs](/guides/robots-and-limits/).
 goodread search <query> [--flags]
 ```
 
-Autocomplete by default, which is allowed.
-`--deep` also reads `/search`, which is not.
+`/book/auto_complete` by default, which is allowed and is what `suggest` reads.
+`--deep` reads `/search`, which is not, so it needs `--no-robots`.
 
-| Flag | Meaning |
-|---|---|
-| `--books` | Return rich book records from autocomplete |
-| `--deep` | Read `/search` as well, which needs `--no-robots` |
+The page is worth the flag for what surrounds the rows as much as for the rows.
+It states the range and the total, hedged the way the site hedges it, how long the site says it took, the qid that ties the ranks to one run, the genre it mapped the query to, the eleven related shelves with their site wide counts, and how far the pager goes.
+Each row carries its rank, the book, the work id off the editions link, the edition count, the author, the cover, the average rating and count, the year, and both the clean link and the tracked one the page wrote.
+
+Three of the five tabs answer with an AWS WAF challenge when nobody is signed in, and this tool reports that and stops rather than trying to satisfy it.
+`--type lists`, `--type groups` and `--type quotes` refuse before a request is spent and exit 4.
+`--type people` answers, with no rows, which is the site's answer and not a parse failure.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--deep` | off | Read `/search` as well, which needs `--no-robots` |
+| `--type` | `books` | Which tab: `books`, `people`, `lists`, `groups`, `quotes` |
+| `--field` | `all` | Narrow the match: `all`, `title`, `author` |
+| `--pages` | `1` | How many pages of `/search` to walk, at the pace floor |
+| `--books` | off | Return the rows as v0.2.0 book records, which the record replaces |
+
+Pages beyond the first are followed through the site's own next link, because that link carries the qid and a walk that dropped it would be a fresh search per page with ranks that do not line up.
+`--limit` trims the rows and nothing else: the totals stay as the site stated them.
 
 ### shelf
 
