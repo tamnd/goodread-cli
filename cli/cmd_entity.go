@@ -386,7 +386,7 @@ func (a *App) emitSearch(rec *goodread.SearchRecord) error {
 		rec.Results = rec.Results[:a.limit]
 	}
 	if Format(a.format) == FormatTable {
-		printSearch(os.Stdout, rec)
+		printSearch(os.Stdout, rec, n)
 		if n == 0 {
 			return codeError(exitNotFound, nil)
 		}

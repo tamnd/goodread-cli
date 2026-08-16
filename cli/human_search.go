@@ -14,12 +14,12 @@ import (
 // of eight hundred and sixteen looks exactly like twenty out of twenty once the
 // header is gone, and the difference is the whole reason the page metadata is
 // on the record at all.
-func printSearch(w io.Writer, rec *goodread.SearchRecord) {
+func printSearch(w io.Writer, rec *goodread.SearchRecord, read int) {
 	fmt.Fprintf(w, "%s\n\n", rec.Query)
 
 	line(w, "type", rec.SearchType)
 	line(w, "field", rec.Field)
-	line(w, "results", searchCount(rec))
+	line(w, "results", searchCount(rec, read))
 	if rec.Elapsed != nil {
 		line(w, "took", fmt.Sprintf("%.2fs, by the site's own clock", *rec.Elapsed))
 	}
@@ -94,12 +94,19 @@ func printHit(w io.Writer, h goodread.SearchHit) {
 }
 
 // searchCount is the count line, hedged exactly as the site hedged it.
-func searchCount(rec *goodread.SearchRecord) string {
+//
+// read is how many rows came back before --limit trimmed them, which is not the
+// same number as how many are printed. A surface that publishes no total and a
+// limit that cut the rows would otherwise agree on a figure that is neither.
+func searchCount(rec *goodread.SearchRecord, read int) string {
 	if rec.TotalResults == nil {
-		if len(rec.Results) == 0 {
+		switch {
+		case read == 0:
 			return ""
+		case read > len(rec.Results):
+			return fmt.Sprintf("%d of the %d read, with no total published by this surface", len(rec.Results), read)
 		}
-		return fmt.Sprintf("%d, with no total published by this surface", len(rec.Results))
+		return fmt.Sprintf("%d, with no total published by this surface", read)
 	}
 	total := comma(*rec.TotalResults)
 	if rec.Approximate {
