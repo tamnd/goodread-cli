@@ -189,6 +189,11 @@ type Contributor struct {
 	ProfileImageURL string `json:"profile_image_url,omitempty"`
 	WebURL          string `json:"web_url,omitempty"`
 
+	// WorksURL is /author/list, which is a different page from the profile and
+	// is the paginated list of everything they wrote. Only the suggest endpoint
+	// hands it over, and it is the entry point to an author's whole catalogue.
+	WorksURL string `json:"works_url,omitempty"`
+
 	// IsGRAuthor says the author has claimed their profile, which is the signal
 	// for whether the description is theirs or somebody else's.
 	IsGRAuthor     *bool  `json:"is_gr_author,omitempty"`
