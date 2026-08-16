@@ -58,6 +58,9 @@ The levels are `1` for the `__NEXT_DATA__` Apollo cache, `2` for `application/ld
 A field the read did not find is absent, not zero.
 A missing `num_pages` means nobody knows, rather than zero pages.
 
+A search record is an envelope around a list of hits with the page's own account of itself: the total the site published and whether the site hedged it, the range it was showing, the qid that ties the ranks to one run, the tabs and which of them answer, the genre it mapped the query to and the related shelves it offered.
+Those numbers stay as the site stated them even when `--limit` trims the rows, because ten rows out of eight hundred and sixteen is still eight hundred and sixteen results.
+
 Every `stats` block also carries its own `via`, which is never omitted, because a book page publishes one edition's readers and a work read publishes all of them and the field names are the same either way.
 
 ## Narrowing fields

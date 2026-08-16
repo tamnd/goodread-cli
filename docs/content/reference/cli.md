@@ -180,7 +180,9 @@ Three of the five tabs answer with an AWS WAF challenge when nobody is signed in
 | `--type` | `books` | Which tab: `books`, `people`, `lists`, `groups`, `quotes` |
 | `--field` | `all` | Narrow the match: `all`, `title`, `author` |
 | `--pages` | `1` | How many pages of `/search` to walk, at the pace floor |
-| `--books` | off | Return the rows as v0.2.0 book records, which the record replaces |
+
+`--books` still returns the v0.2.0 flat book records and `--html` is still the old name for `--deep`.
+Both keep working and neither is in the help, because the record replaced them and advertising both invites somebody to pick the smaller one.
 
 Pages beyond the first are followed through the site's own next link, because that link carries the qid and a walk that dropped it would be a fresh search per page with ranks that do not line up.
 `--limit` trims the rows and nothing else: the totals stay as the site stated them.

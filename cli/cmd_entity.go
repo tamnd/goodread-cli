@@ -326,7 +326,12 @@ func (a *App) searchCmd() *cobra.Command {
 			return a.emitSearch(rec)
 		},
 	}
-	cmd.Flags().BoolVar(&booksMode, "books", false, "return the rows as v0.2.0 book records, which the record replaces")
+	// --books is the v0.2.0 shape. It keeps working for the scripts that read
+	// it and comes out of the help, because the record it predates carries
+	// everything it carried and more, and advertising both invites somebody to
+	// pick the smaller one.
+	cmd.Flags().BoolVar(&booksMode, "books", false, "deprecated: return the rows as v0.2.0 book records")
+	_ = cmd.Flags().MarkHidden("books")
 	cmd.Flags().BoolVar(&deep, "deep", false, "read /search as well, which needs --no-robots")
 	cmd.Flags().StringVar(&searchType, "type", "", "which tab: books, people, lists, groups, quotes")
 	cmd.Flags().StringVar(&field, "field", "", "narrow the match: all, title, author")

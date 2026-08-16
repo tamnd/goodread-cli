@@ -307,6 +307,13 @@ func SearchFrom(e *Extractor, q SearchQuery, retrievedAt time.Time) (*SearchReco
 		e.Miss("a search row carries the book, its author and its work id, and nothing else about any of them. `goodread book <id>` for the edition, `goodread editions <work id>` for the rest of the printings.")
 		rec.Missed = append(rec.Missed, e.Missed[len(e.Missed)-1])
 	}
+	// The people tab answers, politely, with nothing. That is the site's answer
+	// to an anonymous reader and not this tool failing to read the page, and a
+	// record that stayed silent about it would look like a parse that missed.
+	if len(rec.Results) == 0 && rec.SearchType == SearchTypePeople {
+		e.Miss("the people tab answers with zero rows when nobody is signed in. this is what the site returned, not a page this tool could not read.")
+		rec.Missed = append(rec.Missed, e.Missed[len(e.Missed)-1])
+	}
 	if rec.TotalResults != nil && rec.Showing != nil && rec.Showing.To < *rec.TotalResults {
 		e.Miss("this is page %d of %d results. the rest are on the following pages, at --pages.", rec.Page, *rec.TotalResults)
 		rec.Missed = append(rec.Missed, e.Missed[len(e.Missed)-1])

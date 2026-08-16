@@ -275,6 +275,10 @@ func TestSearchPeopleTabIsEmptySignedOut(t *testing.T) {
 	if rec.Showing == nil || rec.Showing.Of != 0 || rec.Showing.Kind != "people" {
 		t.Errorf("showing = %+v, want 0 people", rec.Showing)
 	}
+	// An empty answer that says nothing about itself reads as a broken parser.
+	if !containsSubstring(rec.Missed, "nobody is signed in") {
+		t.Errorf("missed = %v, want the sentence saying this is the site's answer", rec.Missed)
+	}
 }
 
 // TestBlockedTabsAreReportedNotSolved is the security line, held as a test.
