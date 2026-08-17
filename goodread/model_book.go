@@ -370,7 +370,7 @@ func placesFrom(v any) []Place {
 	}
 	out := make([]Place, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, Place{Name: r.Name, CountryName: r.CountryName, Year: r.Year, WebURL: r.WebURL})
+		out = append(out, Place(r))
 	}
 	return out
 }
@@ -382,7 +382,7 @@ func charactersFrom(v any) []Character {
 	}
 	out := make([]Character, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, Character{Name: r.Name, Role: r.Role, WebURL: r.WebURL})
+		out = append(out, Character(r))
 	}
 	return out
 }
@@ -394,7 +394,7 @@ func choiceAwardsFrom(v any) []ChoiceAward {
 	}
 	out := make([]ChoiceAward, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, ChoiceAward{Year: r.Year, Category: r.Category, WebURL: r.WebURL})
+		out = append(out, ChoiceAward(r))
 	}
 	return out
 }
@@ -406,7 +406,7 @@ func languageCountsFrom(v any) []LanguageCount {
 	}
 	out := make([]LanguageCount, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, LanguageCount{ISOLanguageCode: r.ISOLanguageCode, Count: r.Count})
+		out = append(out, LanguageCount(r))
 	}
 	return out
 }

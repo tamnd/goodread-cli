@@ -48,7 +48,10 @@ jobs:
         run: go tool cover -func=coverage.out | tail -1
 
   # golangci-lint bundles staticcheck, govet, ineffassign, errcheck, unused and
-  # more, so it is the main quality gate.
+  # more, so it is the main quality gate. The rules live in .golangci.yml and
+  # the version is pinned, because `latest` means a linter release can turn the
+  # build red on a commit nobody touched, and a gate that fails for reasons
+  # outside the diff stops being read.
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -60,7 +63,7 @@ jobs:
           cache: true
       - uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.12.1
 
   # Scan the module and its dependencies for known vulnerabilities.
   govulncheck:

@@ -1,0 +1,26 @@
+version: "2"
+
+# The lint gate, written down rather than left to whatever the action installed
+# this week. Without this file golangci-lint runs its defaults, and its defaults
+# move: a release that turns one more check on turns the build red on a commit
+# nobody touched. The CI job pins the version and this file pins the rules.
+
+linters:
+  # The standard set: errcheck, govet, ineffassign, staticcheck and unused.
+  default: standard
+
+  exclusions:
+    # The upstream exclusion list for error handling that nobody sensibly
+    # checks: writes to stdout and stderr, Close on a file that was only read,
+    # Flush on a tabwriter that is about to be discarded anyway. A print to a
+    # closed pipe is not a condition this tool can do anything about, and the
+    # alternative is `_, _ =` in front of every line of every table.
+    presets:
+      - std-error-handling
+
+    rules:
+      # The captures are read-only fixtures and the test helpers that open them
+      # already fail the test when a read goes wrong.
+      - path: _test\.go
+        linters:
+          - errcheck
