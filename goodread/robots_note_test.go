@@ -106,40 +106,52 @@ func TestAllowedReadCarriesNoNote(t *testing.T) {
 // behaviour, which is the only way to catch the fetcher that has no disallowed
 // surface today and gains one when Goodreads next edits robots.txt.
 func TestEveryRecordFetcherStamps(t *testing.T) {
+	// Read the directory and parse each file, rather than parser.ParseDir,
+	// which is deprecated because it ignores build tags. Nothing here is behind
+	// a tag, so the only thing that changes is which of the two this file will
+	// still compile against next year.
 	fset := token.NewFileSet()
-	pkg, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, 0)
+	entries, err := os.ReadDir(".")
 	if err != nil {
-		t.Fatalf("parse package: %v", err)
+		t.Fatalf("read the package directory: %v", err)
+	}
+	files := map[string]*ast.File{}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		files[name] = file
 	}
 
 	var checked int
-	for _, p := range pkg {
-		for name, file := range p.Files {
-			for _, d := range file.Decls {
-				fn, ok := d.(*ast.FuncDecl)
-				if !ok || fn.Recv == nil || fn.Body == nil {
-					continue
-				}
-				if !strings.HasPrefix(fn.Name.Name, "Get") || !strings.HasSuffix(fn.Name.Name, "Record") {
-					continue
-				}
-				checked++
-				var buf bytes.Buffer
-				if err := printer.Fprint(&buf, fset, fn.Body); err != nil {
-					t.Fatal(err)
-				}
-				body := buf.String()
-				if strings.Contains(body, "c.stamp(") {
-					continue
-				}
-				if strings.Contains(body, "Record(ctx,") {
-					continue // built out of other record fetchers, which stamped
-				}
-				t.Errorf("%s: %s builds a record without stamping the robots verdict on it",
-					filepath.Base(name), fn.Name.Name)
+	for name, file := range files {
+		for _, d := range file.Decls {
+			fn, ok := d.(*ast.FuncDecl)
+			if !ok || fn.Recv == nil || fn.Body == nil {
+				continue
 			}
+			if !strings.HasPrefix(fn.Name.Name, "Get") || !strings.HasSuffix(fn.Name.Name, "Record") {
+				continue
+			}
+			checked++
+			var buf bytes.Buffer
+			if err := printer.Fprint(&buf, fset, fn.Body); err != nil {
+				t.Fatal(err)
+			}
+			body := buf.String()
+			if strings.Contains(body, "c.stamp(") {
+				continue
+			}
+			if strings.Contains(body, "Record(ctx,") {
+				continue // built out of other record fetchers, which stamped
+			}
+			t.Errorf("%s: %s builds a record without stamping the robots verdict on it",
+				filepath.Base(name), fn.Name.Name)
 		}
 	}
 	if checked == 0 {
